@@ -96,7 +96,7 @@ export default function Navbar({ onOpenDoor }: NavbarProps) {
           Salas
         </a>
         <a
-          href="#"
+          href="/host/apply"
           className="text-[11px] font-normal tracking-[0.1em] uppercase text-brand-smoke hover:text-brand-white transition-colors"
         >
           Postular como host
