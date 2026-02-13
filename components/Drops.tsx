@@ -131,7 +131,7 @@ export default function Drops() {
       className="py-[100px] px-5 md:px-10 max-w-[1320px] mx-auto"
     >
       {/* Divider */}
-      <div className="h-px bg-brand mb-12" />
+      <div className="h-px bg-brand-silver/10 mb-12" />
 
       {/* Header */}
       <div className="flex items-baseline justify-between mb-12">
