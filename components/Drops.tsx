@@ -3,8 +3,11 @@
 import { useState, useEffect, useCallback } from "react";
 import DropCard, { DropData } from "./DropCard";
 import DropOverlay from "./DropOverlay";
+import { createClient } from "@/lib/supabase/client";
+import type { Plan } from "@/lib/supabase/types";
 
-const drops: DropData[] = [
+/* ── Static fallback data (original hardcoded drops) ── */
+const fallbackDrops: DropData[] = [
   {
     id: "014",
     dropNumber: 14,
@@ -131,8 +134,65 @@ const drops: DropData[] = [
   },
 ];
 
+/* ── Convert Plan from Supabase to DropData for the cards ── */
+function planToDropData(plan: Plan): DropData {
+  const firstBadge = plan.badges?.[0] as DropData["status"] | undefined;
+
+  const media = plan.media_urls?.map((url) => ({
+    type: "image" as const,
+    src: url,
+  }));
+
+  const priceStr = "$" + plan.price_clp.toLocaleString("es-CL");
+
+  let time: string | undefined;
+  if (plan.schedule && Array.isArray(plan.schedule) && plan.schedule.length > 0) {
+    const slot = plan.schedule[0] as { start?: string };
+    time = slot.start;
+  }
+
+  return {
+    id: plan.id,
+    dropNumber: plan.drop_number,
+    title: plan.title,
+    description: plan.short_description || plan.description,
+    image: plan.image_url || "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&h=400&fit=crop",
+    media,
+    time,
+    zone: plan.location,
+    status: firstBadge || "default",
+    sala: plan.sala,
+    seats: plan.capacity > 0 ? plan.capacity : null,
+    price: priceStr,
+    unitPrice: plan.price_clp,
+  };
+}
+
 export default function Drops() {
+  const [drops, setDrops] = useState<DropData[]>(fallbackDrops);
   const [activeDrop, setActiveDrop] = useState<DropData | null>(null);
+
+  /* ── Fetch published plans from Supabase ── */
+  useEffect(() => {
+    async function fetchPlans() {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from("plans")
+          .select("*")
+          .eq("status", "published")
+          .order("drop_number", { ascending: false });
+
+        if (error || !data || data.length === 0) return;
+
+        setDrops(data.map((plan) => planToDropData(plan as Plan)));
+      } catch {
+        // Supabase not configured or network error — keep fallback data
+      }
+    }
+
+    fetchPlans();
+  }, []);
 
   /* ── Read ?drop=XXX on mount ── */
   useEffect(() => {
@@ -142,7 +202,7 @@ export default function Drops() {
       const found = drops.find((d) => d.id === dropId);
       if (found) setActiveDrop(found);
     }
-  }, []);
+  }, [drops]);
 
   const openDrop = useCallback((drop: DropData) => {
     setActiveDrop(drop);
