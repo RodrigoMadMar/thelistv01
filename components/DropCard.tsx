@@ -1,25 +1,84 @@
 import Image from "next/image";
 
+export type DropStatus =
+  | "default"
+  | "this_week"
+  | "last_seats"
+  | "sold_out"
+  | "members_first"
+  | "small_group";
+
 export interface DropData {
   id: string;
-  number: string;
+  dropNumber?: number;
   title: string;
-  description: string;
-  sala: string;
+  description?: string;
   image: string;
-  date: string;
-  location: string;
-  seats: number | null; // null = sold out
-  badges: { label: string; type: "lime" | "smoke" | "sold" }[];
+  date?: string;
+  time?: string;
+  zone?: string;
+  status: DropStatus;
+  sala?: string;
+  seats?: number | null;
+  price?: string;
 }
 
-export default function DropCard({ drop }: { drop: DropData }) {
-  const isSoldOut = drop.seats === null;
+const STATUS_BADGE: Record<
+  DropStatus,
+  { label: string; className: string } | null
+> = {
+  default: null,
+  this_week: { label: "THIS WEEK", className: "text-brand-lime" },
+  last_seats: { label: "LAST SEATS", className: "text-brand-lime" },
+  sold_out: {
+    label: "SOLD OUT",
+    className: "text-brand-smoke/50 line-through",
+  },
+  members_first: { label: "MEMBERS FIRST", className: "text-brand-smoke" },
+  small_group: { label: "SMALL GROUP", className: "text-brand-smoke" },
+};
+
+function buildMetaLine(
+  dropNumber?: number,
+  date?: string,
+  time?: string,
+  zone?: string,
+): string {
+  const parts: string[] = [];
+  if (dropNumber != null)
+    parts.push(`DROP ${String(dropNumber).padStart(3, "0")}`);
+  if (date) parts.push(date);
+  if (time) parts.push(time);
+  if (zone) parts.push(zone);
+  return parts.join(" · ");
+}
+
+interface DropCardProps {
+  drop: DropData;
+  onClick: () => void;
+}
+
+export default function DropCard({ drop, onClick }: DropCardProps) {
+  const statusBadge = STATUS_BADGE[drop.status];
+  const metaLine = buildMetaLine(
+    drop.dropNumber,
+    drop.date,
+    drop.time,
+    drop.zone,
+  );
 
   return (
-    <a
-      href={`#drop-${drop.id}`}
-      className="block bg-brand-surface border border-brand rounded-[10px] overflow-hidden cursor-pointer hover:border-brand-hover hover:-translate-y-[3px] hover:shadow-[0_20px_60px_rgba(0,0,0,0.4)] transition-all duration-400"
+    <article
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      tabIndex={0}
+      role="button"
+      className="bg-brand-surface border border-brand rounded-[10px] overflow-hidden cursor-pointer hover:border-brand-hover hover:-translate-y-[3px] hover:shadow-[0_20px_60px_rgba(0,0,0,0.4)] transition-all duration-300 outline-none focus-visible:ring-1 focus-visible:ring-brand-smoke/30"
     >
       {/* Image */}
       <div className="relative w-full h-[220px]">
@@ -32,82 +91,39 @@ export default function DropCard({ drop }: { drop: DropData }) {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-brand-black/10 to-brand-black/50 z-[1]" />
 
-        {/* Drop number */}
-        <span className="absolute top-[14px] left-[14px] text-[10px] font-normal tracking-[0.12em] uppercase text-brand-white z-[2] opacity-70">
-          {drop.number}
-        </span>
-
-        {/* Badges */}
-        <div className="absolute top-[14px] right-[14px] flex gap-[6px] z-[2]">
-          {drop.badges.map((badge, i) => (
+        {/* Badges — top-left, max 2 */}
+        <div className="absolute top-[14px] left-[14px] flex gap-[6px] z-[2]">
+          <span className="px-[10px] py-1 bg-brand-black/65 backdrop-blur-[12px] rounded-full text-[9px] font-medium tracking-[0.1em] uppercase text-brand-lime">
+            PLAN
+          </span>
+          {statusBadge && (
             <span
-              key={i}
-              className={`px-[10px] py-1 bg-brand-black/65 backdrop-blur-[12px] rounded-full text-[9px] font-medium tracking-[0.1em] uppercase ${
-                badge.type === "lime"
-                  ? "text-brand-lime"
-                  : badge.type === "sold"
-                    ? "text-brand-smoke/50 line-through"
-                    : "text-brand-smoke"
-              }`}
+              className={`px-[10px] py-1 bg-brand-black/65 backdrop-blur-[12px] rounded-full text-[9px] font-medium tracking-[0.1em] uppercase ${statusBadge.className}`}
             >
-              {badge.label}
+              {statusBadge.label}
             </span>
-          ))}
+          )}
         </div>
       </div>
 
       {/* Body */}
       <div className="p-[18px] pb-5">
-        <div className="text-[9px] tracking-[0.12em] uppercase text-brand-smoke mb-2">
-          Sala: {drop.sala}
-        </div>
         <h3 className="font-serif text-[19px] font-normal leading-[1.3] mb-[6px]">
           {drop.title}
         </h3>
-        <p className="text-[13px] font-light text-brand-smoke leading-[1.5] mb-4">
-          {drop.description}
-        </p>
 
-        {/* Meta */}
-        <div className="flex items-center gap-4 pt-[14px] border-t border-brand text-[11px] text-brand-smoke">
-          <span className="flex items-center gap-1">
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="opacity-50"
-            >
-              <rect x="3" y="4" width="18" height="18" rx="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-            </svg>
-            {drop.date}
-          </span>
-          <span className="flex items-center gap-1">
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="opacity-50"
-            >
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-              <circle cx="12" cy="10" r="3" />
-            </svg>
-            {drop.location}
-          </span>
-          <span
-            className={`ml-auto font-normal ${isSoldOut ? "text-brand-smoke/40" : "text-brand-lime"}`}
-          >
-            {isSoldOut ? "Agotado" : `${drop.seats} cupos`}
-          </span>
-        </div>
+        {metaLine && (
+          <div className="text-[11px] tracking-[0.04em] text-brand-smoke mb-[6px]">
+            {metaLine}
+          </div>
+        )}
+
+        {drop.description && (
+          <p className="text-[13px] font-light text-brand-smoke/70 leading-[1.5] line-clamp-1">
+            {drop.description}
+          </p>
+        )}
       </div>
-    </a>
+    </article>
   );
 }
