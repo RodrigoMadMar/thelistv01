@@ -1,25 +1,55 @@
 -- ============================================================
 -- thelist.cl — Seed Data
 -- Run AFTER schema.sql in the Supabase SQL Editor.
--- NOTE: The profile rows for hosts/admin are created automatically
--- by the handle_new_user trigger when you create users in
--- Supabase Auth. This seed uses fixed UUIDs so you can also
--- insert them directly for local/testing purposes.
+-- Creates users in auth.users first (trigger auto-creates profiles),
+-- then updates roles and inserts all related data.
+-- All users have password: TheList2025!
 -- ============================================================
 
 -- ────────────────────────────────────────────────────────────
--- 1. PROFILES
+-- 1. AUTH USERS (triggers auto-create profiles)
 -- ────────────────────────────────────────────────────────────
 
-insert into public.profiles (id, email, full_name, role) values
-  ('a0000000-0000-0000-0000-000000000001', 'admin@thelist.cl',       'Admin TheList', 'admin'),
-  ('a0000000-0000-0000-0000-000000000002', 'host1@thelist.cl',       'Matías Correa',  'host'),
-  ('a0000000-0000-0000-0000-000000000003', 'host2@thelist.cl',       'Camila Vega',    'host'),
-  ('a0000000-0000-0000-0000-000000000004', 'usuario@thelist.cl',     'Pedro Sánchez',  'user')
+insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token)
+values
+  ('a0000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+   'admin@thelist.cl', crypt('TheList2025!', gen_salt('bf')), now(),
+   '{"full_name":"Admin TheList"}'::jsonb, now(), now(), '', ''),
+  ('a0000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+   'host1@thelist.cl', crypt('TheList2025!', gen_salt('bf')), now(),
+   '{"full_name":"Matías Correa"}'::jsonb, now(), now(), '', ''),
+  ('a0000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+   'host2@thelist.cl', crypt('TheList2025!', gen_salt('bf')), now(),
+   '{"full_name":"Camila Vega"}'::jsonb, now(), now(), '', ''),
+  ('a0000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+   'usuario@thelist.cl', crypt('TheList2025!', gen_salt('bf')), now(),
+   '{"full_name":"Pedro Sánchez"}'::jsonb, now(), now(), '', '')
 on conflict (id) do nothing;
 
+-- Also create identities (required for email login to work)
+insert into auth.identities (id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at)
+values
+  (gen_random_uuid(), 'a0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'email',
+   '{"sub":"a0000000-0000-0000-0000-000000000001","email":"admin@thelist.cl"}'::jsonb, now(), now(), now()),
+  (gen_random_uuid(), 'a0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000002', 'email',
+   '{"sub":"a0000000-0000-0000-0000-000000000002","email":"host1@thelist.cl"}'::jsonb, now(), now(), now()),
+  (gen_random_uuid(), 'a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000003', 'email',
+   '{"sub":"a0000000-0000-0000-0000-000000000003","email":"host2@thelist.cl"}'::jsonb, now(), now(), now()),
+  (gen_random_uuid(), 'a0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000004', 'email',
+   '{"sub":"a0000000-0000-0000-0000-000000000004","email":"usuario@thelist.cl"}'::jsonb, now(), now(), now())
+on conflict (provider_id, provider) do nothing;
+
 -- ────────────────────────────────────────────────────────────
--- 2. HOSTS
+-- 2. UPDATE PROFILE ROLES (trigger created them as 'user')
+-- ────────────────────────────────────────────────────────────
+
+update public.profiles set role = 'admin', full_name = 'Admin TheList'  where id = 'a0000000-0000-0000-0000-000000000001';
+update public.profiles set role = 'host',  full_name = 'Matías Correa'  where id = 'a0000000-0000-0000-0000-000000000002';
+update public.profiles set role = 'host',  full_name = 'Camila Vega'    where id = 'a0000000-0000-0000-0000-000000000003';
+update public.profiles set role = 'user',  full_name = 'Pedro Sánchez'  where id = 'a0000000-0000-0000-0000-000000000004';
+
+-- ────────────────────────────────────────────────────────────
+-- 3. HOSTS
 -- ────────────────────────────────────────────────────────────
 
 insert into public.hosts (id, profile_id, business_name, slug, bio_short, tagline, location, instagram, status) values
@@ -44,11 +74,10 @@ insert into public.hosts (id, profile_id, business_name, slug, bio_short, taglin
 on conflict (id) do nothing;
 
 -- ────────────────────────────────────────────────────────────
--- 3. APPLICATIONS (3 in different states)
+-- 4. APPLICATIONS (3 in different states)
 -- ────────────────────────────────────────────────────────────
 
 insert into public.applications (id, host_id, experience_name, location, description, commercial_contact, daily_capacity, price_clp, schedule, days_of_week, status, admin_comment, admin_message, reviewed_by, reviewed_at) values
-  -- Approved → became plan "Private tasting"
   ('c0000000-0000-0000-0000-000000000001',
    'b0000000-0000-0000-0000-000000000001',
    'Private tasting',
@@ -63,7 +92,6 @@ insert into public.applications (id, host_id, experience_name, location, descrip
    'Bienvenido a TheList. Tu experiencia fue aprobada.',
    'a0000000-0000-0000-0000-000000000001',
    now()),
-  -- Pending
   ('c0000000-0000-0000-0000-000000000002',
    'b0000000-0000-0000-0000-000000000002',
    'Taller de grabado en cobre',
@@ -75,7 +103,6 @@ insert into public.applications (id, host_id, experience_name, location, descrip
    '{"sábado"}',
    'pending',
    null, null, null, null),
-  -- Rejected
   ('c0000000-0000-0000-0000-000000000003',
    'b0000000-0000-0000-0000-000000000001',
    'Asado masivo',
@@ -93,11 +120,10 @@ insert into public.applications (id, host_id, experience_name, location, descrip
 on conflict (id) do nothing;
 
 -- ────────────────────────────────────────────────────────────
--- 4. PLANS (6 published — matching Drops.tsx data)
+-- 5. PLANS (6 published — matching Drops.tsx data)
 -- ────────────────────────────────────────────────────────────
 
 insert into public.plans (id, application_id, host_id, title, description, short_description, sala, location, price_clp, capacity, duration_minutes, image_url, media_urls, schedule, days_of_week, status, drop_number, badges, featured, published_at) values
-  -- DROP 014: Private tasting
   ('d0000000-0000-0000-0000-000000000001',
    'c0000000-0000-0000-0000-000000000001',
    'b0000000-0000-0000-0000-000000000001',
@@ -115,7 +141,6 @@ insert into public.plans (id, application_id, host_id, title, description, short
    '{"last_seats"}',
    true, now()),
 
-  -- DROP 013: Trekking nocturno
   ('d0000000-0000-0000-0000-000000000002',
    null,
    'b0000000-0000-0000-0000-000000000001',
@@ -133,7 +158,6 @@ insert into public.plans (id, application_id, host_id, title, description, short
    '{"members_first"}',
    false, now()),
 
-  -- DROP 012: Cerámica en silencio
   ('d0000000-0000-0000-0000-000000000003',
    null,
    'b0000000-0000-0000-0000-000000000002',
@@ -151,7 +175,6 @@ insert into public.plans (id, application_id, host_id, title, description, short
    '{"this_week"}',
    false, now()),
 
-  -- DROP 011: Kayak en los fiordos
   ('d0000000-0000-0000-0000-000000000004',
    null,
    'b0000000-0000-0000-0000-000000000001',
@@ -169,7 +192,6 @@ insert into public.plans (id, application_id, host_id, title, description, short
    '{"sold_out"}',
    false, now()),
 
-  -- DROP 010: Stand-up a puerta cerrada
   ('d0000000-0000-0000-0000-000000000005',
    null,
    'b0000000-0000-0000-0000-000000000002',
@@ -187,7 +209,6 @@ insert into public.plans (id, application_id, host_id, title, description, short
    '{"last_seats"}',
    false, now()),
 
-  -- DROP 009: Cena ciega
   ('d0000000-0000-0000-0000-000000000006',
    null,
    'b0000000-0000-0000-0000-000000000001',
@@ -207,7 +228,7 @@ insert into public.plans (id, application_id, host_id, title, description, short
 on conflict (id) do nothing;
 
 -- ────────────────────────────────────────────────────────────
--- 5. RESERVATIONS (3 mock)
+-- 6. RESERVATIONS (3 mock)
 -- ────────────────────────────────────────────────────────────
 
 insert into public.reservations (id, plan_id, user_id, num_people, date, time_slot, total_price, status) values
@@ -226,7 +247,7 @@ insert into public.reservations (id, plan_id, user_id, num_people, date, time_sl
 on conflict (id) do nothing;
 
 -- ────────────────────────────────────────────────────────────
--- 6. MESSAGES (2 mock)
+-- 7. MESSAGES (2 mock)
 -- ────────────────────────────────────────────────────────────
 
 insert into public.messages (id, host_id, sender_id, content, read) values
