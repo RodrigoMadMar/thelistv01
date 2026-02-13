@@ -8,12 +8,17 @@ export type DropStatus =
   | "members_first"
   | "small_group";
 
+export type MediaItem =
+  | { type: "image"; src: string }
+  | { type: "video"; src: string; poster?: string };
+
 export interface DropData {
   id: string;
   dropNumber?: number;
   title: string;
   description?: string;
   image: string;
+  media?: MediaItem[];
   date?: string;
   time?: string;
   zone?: string;
@@ -21,6 +26,7 @@ export interface DropData {
   sala?: string;
   seats?: number | null;
   price?: string;
+  unitPrice?: number;
 }
 
 const STATUS_BADGE: Record<
