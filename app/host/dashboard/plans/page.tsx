@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import RequestChangeButton from "@/components/RequestChangeButton";
+import { applyServiceFee } from "@/lib/pricing";
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   draft: { label: "Borrador", className: "text-brand-smoke border-brand-smoke/30" },
@@ -97,7 +98,8 @@ export default async function HostPlansPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-[18px] text-brand-white">${plan.price_clp?.toLocaleString("es-CL")}</div>
-                    <div className="text-[11px] text-brand-smoke">por persona</div>
+                    <div className="text-[11px] text-brand-smoke">tu precio por persona</div>
+                    <div className="text-[11px] text-brand-smoke/50">Público: ${applyServiceFee(plan.price_clp).toLocaleString("es-CL")}</div>
                   </div>
                 </div>
 

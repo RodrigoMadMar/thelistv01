@@ -27,6 +27,8 @@ export interface DropData {
   seats?: number | null;
   price?: string;
   unitPrice?: number;
+  isNominal?: boolean;
+  timeSlots?: { time: string; capacity: number }[] | null;
 }
 
 const STATUS_BADGE: Record<

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { DropData, DropStatus, MediaItem } from "./DropCard";
 
@@ -182,6 +183,7 @@ interface DropOverlayProps {
 }
 
 export default function DropOverlay({ drop, onClose }: DropOverlayProps) {
+  const router = useRouter();
   const [qty, setQty] = useState(1);
 
   // Reset qty when a different drop opens
@@ -367,6 +369,12 @@ export default function DropOverlay({ drop, onClose }: DropOverlayProps) {
 
           {/* CTA */}
           <button
+            onClick={() => {
+              if (!isSoldOut) {
+                router.push(`/checkout/${drop.id}?qty=${qty}`);
+                onClose();
+              }
+            }}
             className={`w-full font-sans text-[13px] font-medium tracking-[0.08em] uppercase px-8 py-[14px] rounded-full transition-all duration-300 cursor-pointer ${cta.style}`}
           >
             {isSoldOut

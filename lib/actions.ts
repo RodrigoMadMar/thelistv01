@@ -405,3 +405,75 @@ export async function requestPlanChange(planId: string, message: string) {
   if (error) return { error: error.message };
   return { success: true };
 }
+
+// ── Create reservation (checkout flow) ──
+
+export async function createReservation(data: {
+  planId: string;
+  numPeople: number;
+  date: string;
+  timeSlot: string | null;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  contactRut: string;
+  ticketHolders: { name: string; rut: string; email: string }[] | null;
+  subtotal: number;
+  serviceFee: number;
+  totalPrice: number;
+}) {
+  const supabase = await createClient();
+
+  // Get optional authenticated user
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Verify plan exists and is published
+  const { data: plan, error: planError } = await supabase
+    .from("plans")
+    .select("id, status, capacity, time_slots")
+    .eq("id", data.planId)
+    .single();
+
+  if (planError || !plan) return { error: "Experiencia no encontrada" };
+  if (plan.status !== "published") return { error: "Esta experiencia no está disponible" };
+
+  // Validate capacity against time slot if applicable
+  const timeSlots = (plan.time_slots as { time: string; capacity: number }[]) || [];
+  if (timeSlots.length > 0 && data.timeSlot) {
+    const slot = timeSlots.find((s: { time: string }) => s.time === data.timeSlot);
+    if (!slot) return { error: "Horario no válido" };
+    if (data.numPeople > slot.capacity) return { error: "No hay suficientes cupos para este horario" };
+  } else if (data.numPeople > plan.capacity) {
+    return { error: "No hay suficientes cupos" };
+  }
+
+  // Create reservation
+  const { data: reservation, error: insertError } = await supabase
+    .from("reservations")
+    .insert({
+      plan_id: data.planId,
+      user_id: user?.id || null,
+      num_people: data.numPeople,
+      date: data.date,
+      time_slot: data.timeSlot,
+      contact_name: data.contactName,
+      contact_email: data.contactEmail,
+      contact_phone: data.contactPhone,
+      contact_rut: data.contactRut,
+      ticket_holders: data.ticketHolders,
+      subtotal: data.subtotal,
+      service_fee: data.serviceFee,
+      total_price: data.totalPrice,
+      payment_status: "pending",
+      status: "pending",
+    })
+    .select("id")
+    .single();
+
+  if (insertError) return { error: insertError.message };
+
+  // TODO: Integrate with MercadoPago/Transbank payment API here
+  // After payment confirmation, update payment_status to 'paid' and status to 'confirmed'
+
+  return { success: true, reservationId: reservation.id };
+}

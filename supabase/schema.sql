@@ -79,6 +79,8 @@ create table if not exists public.plans (
   media_urls        text[],
   schedule          jsonb,
   days_of_week      text[],
+  is_nominal        boolean default false,
+  time_slots        jsonb,        -- [{ "time": "21:00", "capacity": 10 }, ...]
   status            text default 'draft'
                       check (status in ('draft', 'published', 'paused', 'archived')),
   drop_number       serial,
@@ -113,18 +115,29 @@ create table if not exists public.public_applications (
   created_at          timestamptz default now()
 );
 
--- reservations (mock)
+-- reservations
 create table if not exists public.reservations (
-  id          uuid default gen_random_uuid() primary key,
-  plan_id     uuid references public.plans(id) on delete cascade not null,
-  user_id     uuid references public.profiles(id) on delete cascade not null,
-  num_people  integer default 1,
-  date        date not null,
-  time_slot   text,
-  total_price integer not null,
-  status      text default 'confirmed'
-                check (status in ('pending', 'confirmed', 'completed', 'cancelled')),
-  created_at  timestamptz default now()
+  id               uuid default gen_random_uuid() primary key,
+  plan_id          uuid references public.plans(id) on delete cascade not null,
+  user_id          uuid references public.profiles(id) on delete cascade,
+  num_people       integer default 1,
+  date             date not null,
+  time_slot        text,
+  contact_name     text,
+  contact_email    text,
+  contact_phone    text,
+  contact_rut      text,
+  ticket_holders   jsonb,           -- [{ "name": "...", "rut": "...", "email": "..." }, ...]
+  subtotal         integer default 0,
+  service_fee      integer default 0,
+  total_price      integer not null,
+  payment_status   text default 'pending'
+                     check (payment_status in ('pending', 'paid', 'failed', 'refunded')),
+  payment_provider text
+                     check (payment_provider is null or payment_provider in ('mercadopago', 'transbank')),
+  status           text default 'pending'
+                     check (status in ('pending', 'confirmed', 'completed', 'cancelled')),
+  created_at       timestamptz default now()
 );
 
 -- onboarding_invites (tokens de onboarding para hosts aprobados)
