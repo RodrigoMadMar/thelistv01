@@ -55,6 +55,7 @@ function OnboardingWizard() {
   const [legalRepRut, setLegalRepRut] = useState("");
 
   // Step 3: Banking
+  const [bankName, setBankName] = useState("");
   const [bankAccount, setBankAccount] = useState("");
   const [bankType, setBankType] = useState<"vista" | "corriente">("vista");
 
@@ -93,7 +94,7 @@ function OnboardingWizard() {
       case 1:
         return legalName.trim() !== "" && rut.trim() !== "" && legalRepName.trim() !== "" && legalRepRut.trim() !== "";
       case 2:
-        return bankAccount.trim() !== "";
+        return bankName !== "" && bankAccount.trim() !== "";
       case 3:
         return termsAccepted;
       default:
@@ -113,6 +114,7 @@ function OnboardingWizard() {
       rut,
       legalRepName,
       legalRepRut,
+      bankName,
       bankAccount,
       bankType,
       termsAccepted,
@@ -309,14 +311,30 @@ function OnboardingWizard() {
                 Datos bancarios para recibir pagos. Solo bancos de Chile.
               </p>
               <div>
-                <label className={labelClass}>Número de cuenta</label>
-                <input
-                  type="text"
-                  value={bankAccount}
-                  onChange={(e) => setBankAccount(e.target.value)}
-                  className={inputClass}
-                  placeholder="Número de cuenta bancaria"
-                />
+                <label className={labelClass}>Banco</label>
+                <select
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  className={inputClass + " cursor-pointer"}
+                >
+                  <option value="" disabled>Selecciona tu banco</option>
+                  <option value="BancoEstado">BancoEstado</option>
+                  <option value="Banco de Chile">Banco de Chile</option>
+                  <option value="Banco Santander">Banco Santander</option>
+                  <option value="BCI">BCI</option>
+                  <option value="Itaú Corpbanca">Itaú Corpbanca</option>
+                  <option value="Scotiabank">Scotiabank</option>
+                  <option value="Banco BICE">Banco BICE</option>
+                  <option value="Banco Security">Banco Security</option>
+                  <option value="Banco Falabella">Banco Falabella</option>
+                  <option value="Banco Ripley">Banco Ripley</option>
+                  <option value="Banco Consorcio">Banco Consorcio</option>
+                  <option value="Banco Internacional">Banco Internacional</option>
+                  <option value="Banco BTG Pactual">Banco BTG Pactual</option>
+                  <option value="HSBC Bank Chile">HSBC Bank Chile</option>
+                  <option value="Tanner">Tanner</option>
+                  <option value="Tenpo">Tenpo</option>
+                </select>
               </div>
               <div>
                 <label className={labelClass}>Tipo de cuenta</label>
@@ -328,6 +346,16 @@ function OnboardingWizard() {
                   <option value="vista">Cuenta Vista</option>
                   <option value="corriente">Cuenta Corriente</option>
                 </select>
+              </div>
+              <div>
+                <label className={labelClass}>Número de cuenta</label>
+                <input
+                  type="text"
+                  value={bankAccount}
+                  onChange={(e) => setBankAccount(e.target.value)}
+                  className={inputClass}
+                  placeholder="Número de cuenta bancaria"
+                />
               </div>
             </>
           )}

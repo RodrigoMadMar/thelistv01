@@ -161,6 +161,7 @@ export async function completeOnboarding(data: {
   rut: string;
   legalRepName: string;
   legalRepRut: string;
+  bankName: string;
   bankAccount: string;
   bankType: "vista" | "corriente";
   termsAccepted: boolean;
@@ -276,6 +277,7 @@ export async function completeOnboarding(data: {
     rut: data.rut,
     legal_rep_name: data.legalRepName,
     legal_rep_rut: data.legalRepRut,
+    bank_name: data.bankName,
     bank_account: data.bankAccount,
     bank_type: data.bankType,
     terms_accepted_at: new Date().toISOString(),

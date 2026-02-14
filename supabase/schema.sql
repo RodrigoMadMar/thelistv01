@@ -148,6 +148,7 @@ create table if not exists public.host_profiles (
   rut               text,
   legal_rep_name    text,
   legal_rep_rut     text,
+  bank_name         text,
   bank_account      text,
   bank_type         text check (bank_type in ('vista', 'corriente')),
   terms_accepted_at timestamptz,
