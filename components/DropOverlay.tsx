@@ -240,15 +240,13 @@ export default function DropOverlay({ drop, onClose }: DropOverlayProps) {
   return (
     <div
       className="fixed inset-0 z-[8000] flex items-center justify-center p-4"
-      onClick={onClose}
     >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-brand-black/80 backdrop-blur-[8px]" />
+      {/* Backdrop — only this element closes the overlay */}
+      <div className="absolute inset-0 bg-brand-black/80 backdrop-blur-[8px]" onClick={onClose} />
 
       {/* Modal */}
       <div
         className="relative w-full max-w-[520px] max-h-[90vh] overflow-y-auto bg-brand-surface border border-brand rounded-[14px] animate-fade-up"
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Close */}
         <button
@@ -372,7 +370,6 @@ export default function DropOverlay({ drop, onClose }: DropOverlayProps) {
             onClick={() => {
               if (!isSoldOut) {
                 router.push(`/checkout/${drop.id}?qty=${qty}`);
-                onClose();
               }
             }}
             className={`w-full font-sans text-[13px] font-medium tracking-[0.08em] uppercase px-8 py-[14px] rounded-full transition-all duration-300 cursor-pointer ${cta.style}`}
