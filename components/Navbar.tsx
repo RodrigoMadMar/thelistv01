@@ -7,9 +7,10 @@ import type { Profile } from "@/lib/supabase/types";
 
 interface NavbarProps {
   onOpenDoor: () => void;
+  onOpenApply: () => void;
 }
 
-export default function Navbar({ onOpenDoor }: NavbarProps) {
+export default function Navbar({ onOpenDoor, onOpenApply }: NavbarProps) {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -95,12 +96,12 @@ export default function Navbar({ onOpenDoor }: NavbarProps) {
         >
           Salas
         </a>
-        <a
-          href="/host/apply"
-          className="text-[11px] font-normal tracking-[0.1em] uppercase text-brand-smoke hover:text-brand-white transition-colors"
+        <button
+          onClick={onOpenApply}
+          className="text-[11px] font-normal tracking-[0.1em] uppercase text-brand-smoke hover:text-brand-white transition-colors bg-transparent border-none cursor-pointer"
         >
           Postular como host
-        </a>
+        </button>
         <button
           onClick={onOpenDoor}
           className="flex items-center gap-2 text-[11px] font-normal tracking-[0.1em] uppercase text-brand-white bg-white/[0.06] border border-white/[0.12] px-[18px] py-[7px] rounded-full hover:bg-white/10 hover:border-white/20 transition-all"
