@@ -127,9 +127,28 @@ export default function DropCard({ drop, onClick }: DropCardProps) {
         )}
 
         {drop.description && (
-          <p className="text-[13px] font-light text-brand-smoke/70 leading-[1.5] line-clamp-1">
+          <p className="text-[13px] font-light text-brand-smoke/70 leading-[1.5] line-clamp-1 mb-3">
             {drop.description}
           </p>
+        )}
+
+        {/* Price + seats row */}
+        {(drop.price || (drop.seats != null && drop.seats > 0)) && (
+          <div className="flex items-center justify-between pt-3 border-t border-brand">
+            {drop.price && (
+              <span className={`text-[15px] font-normal ${drop.status === "sold_out" ? "text-brand-smoke/40 line-through" : "text-brand-white"}`}>
+                {drop.price}
+              </span>
+            )}
+            {drop.seats != null && drop.seats > 0 && drop.status !== "sold_out" && (
+              <span className={`text-[11px] ${drop.seats <= 3 ? "text-brand-lime" : "text-brand-smoke/50"}`}>
+                {drop.seats} {drop.seats === 1 ? "cupo" : "cupos"}
+              </span>
+            )}
+            {drop.status === "sold_out" && (
+              <span className="text-[11px] text-brand-smoke/40">Agotado</span>
+            )}
+          </div>
         )}
       </div>
     </article>

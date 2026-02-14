@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Image from "next/image";
+import { applyServiceFee, formatCLP } from "@/lib/pricing";
 
 export default async function HostPublicPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -141,8 +142,19 @@ export default async function HostPublicPage({ params }: { params: Promise<{ slu
                       DROP {String(plan.drop_number).padStart(3, "0")} · {plan.location}
                     </div>
                     {plan.short_description && (
-                      <p className="text-[12px] text-brand-smoke/60 line-clamp-1">{plan.short_description}</p>
+                      <p className="text-[12px] text-brand-smoke/60 line-clamp-1 mb-3">{plan.short_description}</p>
                     )}
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-brand">
+                      <span className="text-[16px] text-brand-white font-normal">
+                        {formatCLP(applyServiceFee(plan.price_clp))}
+                      </span>
+                      <a
+                        href={`/checkout/${plan.id}`}
+                        className="px-5 py-2 rounded-full bg-brand-white text-brand-black text-[11px] font-medium uppercase tracking-[0.08em] hover:-translate-y-px transition-all"
+                      >
+                        Reservar
+                      </a>
+                    </div>
                   </div>
                 </div>
               ))}
