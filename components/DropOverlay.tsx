@@ -9,11 +9,11 @@ import { DropData, DropStatus, MediaItem } from "./DropCard";
 const CTA: Record<DropStatus, { label: string; style: string }> = {
   default: {
     label: "Reservar",
-    style: "bg-brand-white text-brand-black hover:-translate-y-px",
+    style: "bg-brand-lime text-brand-black hover:-translate-y-px",
   },
   this_week: {
     label: "Reservar",
-    style: "bg-brand-white text-brand-black hover:-translate-y-px",
+    style: "bg-brand-lime text-brand-black hover:-translate-y-px",
   },
   last_seats: {
     label: "Tomar últimos cupos",
@@ -26,11 +26,11 @@ const CTA: Record<DropStatus, { label: string; style: string }> = {
   },
   members_first: {
     label: "Entrar",
-    style: "bg-brand-white text-brand-black hover:-translate-y-px",
+    style: "bg-brand-lime text-brand-black hover:-translate-y-px",
   },
   small_group: {
     label: "Reservar",
-    style: "bg-brand-white text-brand-black hover:-translate-y-px",
+    style: "bg-brand-lime text-brand-black hover:-translate-y-px",
   },
 };
 

@@ -60,4 +60,12 @@
   .animation-delay-1500 {
     animation-delay: 1.5s;
   }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
