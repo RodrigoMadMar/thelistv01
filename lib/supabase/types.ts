@@ -146,3 +146,34 @@ export interface Message {
   read: boolean;
   created_at: string;
 }
+
+export type OnboardingApplicationType = "internal" | "public";
+
+export type BankAccountType = "vista" | "corriente";
+
+export interface OnboardingInvite {
+  id: string;
+  application_id: string;
+  application_type: OnboardingApplicationType;
+  email: string;
+  token: string;
+  expires_at: string;
+  used_at: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface HostProfile {
+  id: string;
+  host_id: string;
+  legal_name: string | null;
+  rut: string | null;
+  legal_rep_name: string | null;
+  legal_rep_rut: string | null;
+  bank_account: string | null;
+  bank_type: BankAccountType | null;
+  terms_accepted_at: string | null;
+  onboarded: boolean;
+  created_at: string;
+  updated_at: string;
+}

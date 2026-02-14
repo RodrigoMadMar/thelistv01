@@ -40,7 +40,7 @@ export async function updateSession(request: NextRequest) {
 
     // Protected routes: redirect to /login if not authenticated
     const protectedPaths = ["/host", "/admin"];
-    const publicExceptions = ["/host/apply"];
+    const publicExceptions = ["/host/apply", "/host/onboarding"];
     const isProtected = protectedPaths.some((path) =>
       request.nextUrl.pathname.startsWith(path),
     );

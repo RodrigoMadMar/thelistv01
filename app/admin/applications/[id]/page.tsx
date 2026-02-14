@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { approveApplication, rejectApplication } from "@/lib/actions";
+import { generateOnboardingInvite } from "@/lib/onboarding-actions";
 
 const SALAS = ["La Buena Mesa", "Bar & Vino", "Arte & Experimental", "Fiestas & Sesiones", "Outdoor"];
 
 interface ApplicationData {
   id: string;
+  host_id: string;
   experience_name: string;
   location: string;
   description: string;
@@ -22,7 +24,7 @@ interface ApplicationData {
   admin_comment: string | null;
   admin_message: string | null;
   created_at: string;
-  hosts: { business_name: string; slug: string } | null;
+  hosts: { business_name: string; slug: string; profile_id: string } | null;
 }
 
 export default function AdminApplicationDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -34,6 +36,7 @@ export default function AdminApplicationDetailPage({ params }: { params: Promise
   // Approve state
   const [sala, setSala] = useState(SALAS[0]);
   const [approving, setApproving] = useState(false);
+  const [onboardingLink, setOnboardingLink] = useState("");
 
   // Reject state
   const [showReject, setShowReject] = useState(false);
@@ -45,6 +48,8 @@ export default function AdminApplicationDetailPage({ params }: { params: Promise
   const [internalComment, setInternalComment] = useState("");
 
   const [feedback, setFeedback] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [hostEmail, setHostEmail] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -53,7 +58,7 @@ export default function AdminApplicationDetailPage({ params }: { params: Promise
       const supabase = createClient();
       const { data, error } = await supabase
         .from("applications")
-        .select("*, hosts(business_name, slug)")
+        .select("*, hosts(business_name, slug, profile_id)")
         .eq("id", id)
         .single();
 
@@ -63,22 +68,60 @@ export default function AdminApplicationDetailPage({ params }: { params: Promise
       }
       setApp(data as unknown as ApplicationData);
       setInternalComment(data.admin_comment || "");
+
+      // Get host email
+      if (data.hosts?.profile_id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("email")
+          .eq("id", data.hosts.profile_id)
+          .single();
+        if (profile) setHostEmail(profile.email);
+      }
+
       setLoading(false);
     }
     load();
   }, [params]);
 
   async function handleApprove() {
+    if (!app) return;
     setApproving(true);
     setFeedback("");
+
+    // 1. Approve and create draft plan
     const result = await approveApplication(appId, sala);
-    setApproving(false);
     if (result.error) {
       setFeedback("Error: " + result.error);
+      setApproving(false);
+      return;
+    }
+
+    // 2. Generate onboarding invite if we have the host email
+    if (hostEmail) {
+      const inviteResult = await generateOnboardingInvite(appId, "internal", hostEmail);
+      if (inviteResult.error) {
+        setFeedback("Aprobada y plan creado, pero error generando link de onboarding: " + inviteResult.error);
+        setApproving(false);
+        return;
+      }
+
+      const baseUrl = window.location.origin;
+      const link = `${baseUrl}/host/onboarding?token=${inviteResult.token}`;
+      setOnboardingLink(link);
+      setFeedback("Experiencia aprobada. Plan creado como borrador. Link de onboarding generado.");
     } else {
       setFeedback("Experiencia aprobada. Plan creado como borrador.");
-      setTimeout(() => router.push("/admin/applications"), 2000);
     }
+
+    setApproving(false);
+    setApp((prev) => prev ? { ...prev, status: "approved" } : prev);
+  }
+
+  async function handleCopyLink() {
+    await navigator.clipboard.writeText(onboardingLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   async function handleReject() {
@@ -131,6 +174,9 @@ export default function AdminApplicationDetailPage({ params }: { params: Promise
         <div className="text-[13px] text-brand-smoke">
           {(app.hosts as Record<string, string> | null)?.business_name} · {app.location} · {date}
         </div>
+        {hostEmail && (
+          <div className="text-[12px] text-brand-smoke/60 mt-1">{hostEmail}</div>
+        )}
       </div>
 
       {/* Details */}
@@ -199,6 +245,30 @@ export default function AdminApplicationDetailPage({ params }: { params: Promise
         </button>
       </div>
 
+      {/* Onboarding link (shown after approval) */}
+      {onboardingLink && (
+        <div className="mb-8 p-5 rounded-xl border border-brand-lime/30 bg-brand-lime/[0.05]">
+          <div className="text-[10px] uppercase tracking-[0.1em] text-brand-lime/70 mb-3">Link de onboarding</div>
+          <p className="text-[11px] text-brand-smoke mb-3">
+            Envía este link a <strong className="text-brand-white">{hostEmail}</strong> para que complete su onboarding. Expira en 7 días.
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              readOnly
+              value={onboardingLink}
+              className="flex-1 bg-brand-black border border-brand rounded-lg px-3 py-2 text-[12px] text-brand-white font-mono focus:outline-none"
+            />
+            <button
+              onClick={handleCopyLink}
+              className="px-4 py-2 bg-brand-lime text-brand-black text-[11px] uppercase tracking-[0.08em] font-medium rounded-full hover:-translate-y-px transition-all cursor-pointer border-none shrink-0"
+            >
+              {copied ? "Copiado" : "Copiar link"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       {isPending && (
         <div className="space-y-4 p-5 rounded-xl border border-brand bg-brand-surface">
@@ -217,7 +287,7 @@ export default function AdminApplicationDetailPage({ params }: { params: Promise
               disabled={approving}
               className="px-6 py-3 rounded-full bg-brand-lime text-brand-black text-[12px] font-medium uppercase tracking-[0.08em] hover:-translate-y-px transition-all cursor-pointer disabled:opacity-50 border-none"
             >
-              {approving ? "Aprobando..." : "Aprobar experiencia"}
+              {approving ? "Aprobando..." : "Aprobar y generar link"}
             </button>
           </div>
 

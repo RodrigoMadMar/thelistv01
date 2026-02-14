@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { approvePublicApplication, rejectPublicApplication } from "@/lib/actions";
+import { rejectPublicApplication } from "@/lib/actions";
+import { generateOnboardingInvite } from "@/lib/onboarding-actions";
 
 const SALAS = ["La Buena Mesa", "Bar & Vino", "Arte & Experimental", "Fiestas & Sesiones", "Outdoor"];
 
@@ -36,6 +37,7 @@ export default function AdminPublicApplicationDetailPage({ params }: { params: P
   // Approve state
   const [sala, setSala] = useState(SALAS[0]);
   const [approving, setApproving] = useState(false);
+  const [onboardingLink, setOnboardingLink] = useState("");
 
   // Reject state
   const [showReject, setShowReject] = useState(false);
@@ -46,6 +48,7 @@ export default function AdminPublicApplicationDetailPage({ params }: { params: P
   const [internalComment, setInternalComment] = useState("");
 
   const [feedback, setFeedback] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -70,16 +73,51 @@ export default function AdminPublicApplicationDetailPage({ params }: { params: P
   }, [params]);
 
   async function handleApprove() {
+    if (!app) return;
     setApproving(true);
     setFeedback("");
-    const result = await approvePublicApplication(appId, sala);
-    setApproving(false);
-    if (result.error) {
-      setFeedback("Error: " + result.error);
-    } else {
-      setFeedback("Experiencia aprobada. Cuenta creada y email de activación enviado.");
-      setTimeout(() => router.push("/admin/applications"), 2000);
+
+    // 1. Mark as approved
+    const supabase = createClient();
+    const { error: updateError } = await supabase
+      .from("public_applications")
+      .update({
+        status: "approved",
+        admin_comment: internalComment || null,
+      })
+      .eq("id", appId);
+
+    if (updateError) {
+      setFeedback("Error al aprobar: " + updateError.message);
+      setApproving(false);
+      return;
     }
+
+    // 2. Generate onboarding invite token
+    const result = await generateOnboardingInvite(appId, "public", app.email);
+
+    if (result.error) {
+      setFeedback("Aprobada, pero error generando link: " + result.error);
+      setApproving(false);
+      return;
+    }
+
+    // 3. Build the onboarding link
+    const baseUrl = window.location.origin;
+    const link = `${baseUrl}/host/onboarding?token=${result.token}`;
+    setOnboardingLink(link);
+
+    setFeedback("Postulación aprobada. Link de onboarding generado.");
+    setApproving(false);
+
+    // Update local state
+    setApp((prev) => prev ? { ...prev, status: "approved" } : prev);
+  }
+
+  async function handleCopyLink() {
+    await navigator.clipboard.writeText(onboardingLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   async function handleReject() {
@@ -118,6 +156,7 @@ export default function AdminPublicApplicationDetailPage({ params }: { params: P
   const inputClass = "w-full bg-brand-surface border border-brand rounded-lg px-4 py-3 text-[14px] text-brand-white placeholder:text-brand-smoke/40 focus:outline-none focus:border-brand-smoke/30 transition-colors";
   const labelClass = "block text-[11px] uppercase tracking-[0.1em] text-brand-smoke mb-2";
   const isPending = app.status === "pending";
+  const isApproved = app.status === "approved";
 
   return (
     <div className="p-6 md:p-10 max-w-[800px]">
@@ -141,7 +180,7 @@ export default function AdminPublicApplicationDetailPage({ params }: { params: P
         </div>
       </div>
 
-      {/* Contact info (unique to public apps) */}
+      {/* Contact info */}
       <div className="mb-6 p-5 rounded-xl border border-blue-400/20 bg-blue-400/[0.03]">
         <div className="text-[10px] uppercase tracking-[0.1em] text-blue-300/70 mb-3">Datos de contacto</div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-[13px]">
@@ -158,9 +197,11 @@ export default function AdminPublicApplicationDetailPage({ params }: { params: P
             <p className="text-brand-white">{app.host_name || "—"}</p>
           </div>
         </div>
-        <p className="text-[11px] text-blue-300/50 mt-3">
-          Al aprobar se creará cuenta para {app.email} y se enviará email de activación.
-        </p>
+        {isPending && (
+          <p className="text-[11px] text-blue-300/50 mt-3">
+            Al aprobar se generará un link de onboarding para que {app.email} cree su cuenta.
+          </p>
+        )}
       </div>
 
       {/* Details */}
@@ -229,6 +270,30 @@ export default function AdminPublicApplicationDetailPage({ params }: { params: P
         </button>
       </div>
 
+      {/* Onboarding link (shown after approval) */}
+      {onboardingLink && (
+        <div className="mb-8 p-5 rounded-xl border border-brand-lime/30 bg-brand-lime/[0.05]">
+          <div className="text-[10px] uppercase tracking-[0.1em] text-brand-lime/70 mb-3">Link de onboarding</div>
+          <p className="text-[11px] text-brand-smoke mb-3">
+            Envía este link a <strong className="text-brand-white">{app.email}</strong> para que complete su registro. Expira en 7 días.
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              readOnly
+              value={onboardingLink}
+              className="flex-1 bg-brand-black border border-brand rounded-lg px-3 py-2 text-[12px] text-brand-white font-mono focus:outline-none"
+            />
+            <button
+              onClick={handleCopyLink}
+              className="px-4 py-2 bg-brand-lime text-brand-black text-[11px] uppercase tracking-[0.08em] font-medium rounded-full hover:-translate-y-px transition-all cursor-pointer border-none shrink-0"
+            >
+              {copied ? "Copiado" : "Copiar link"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       {isPending && (
         <div className="space-y-4 p-5 rounded-xl border border-brand bg-brand-surface">
@@ -247,7 +312,7 @@ export default function AdminPublicApplicationDetailPage({ params }: { params: P
               disabled={approving}
               className="px-6 py-3 rounded-full bg-brand-lime text-brand-black text-[12px] font-medium uppercase tracking-[0.08em] hover:-translate-y-px transition-all cursor-pointer disabled:opacity-50 border-none"
             >
-              {approving ? "Aprobando..." : "Aprobar y crear cuenta"}
+              {approving ? "Aprobando..." : "Aprobar y generar link"}
             </button>
           </div>
 
@@ -280,6 +345,22 @@ export default function AdminPublicApplicationDetailPage({ params }: { params: P
                 </button>
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Status badge for already processed */}
+      {isApproved && !onboardingLink && (
+        <div className="p-4 rounded-xl border border-brand-lime/20 bg-brand-lime/[0.03] text-center">
+          <span className="text-[13px] text-brand-lime">Postulación aprobada — link de onboarding ya generado.</span>
+        </div>
+      )}
+
+      {app.status === "rejected" && (
+        <div className="p-4 rounded-xl border border-red-400/20 bg-red-400/[0.03] text-center">
+          <span className="text-[13px] text-red-400">Postulación rechazada.</span>
+          {app.admin_comment && (
+            <p className="text-[12px] text-brand-smoke mt-1">Motivo: {app.admin_comment}</p>
           )}
         </div>
       )}

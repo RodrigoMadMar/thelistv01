@@ -127,6 +127,35 @@ create table if not exists public.reservations (
   created_at  timestamptz default now()
 );
 
+-- onboarding_invites (tokens de onboarding para hosts aprobados)
+create table if not exists public.onboarding_invites (
+  id                uuid default gen_random_uuid() primary key,
+  application_id    uuid not null,
+  application_type  text not null check (application_type in ('internal', 'public')),
+  email             text not null,
+  token             text unique not null,
+  expires_at        timestamptz not null,
+  used_at           timestamptz,
+  created_by        uuid references public.profiles(id),
+  created_at        timestamptz default now()
+);
+
+-- host_profiles (datos legales y bancarios del host)
+create table if not exists public.host_profiles (
+  id                uuid default gen_random_uuid() primary key,
+  host_id           uuid references public.hosts(id) on delete cascade unique not null,
+  legal_name        text,
+  rut               text,
+  legal_rep_name    text,
+  legal_rep_rut     text,
+  bank_account      text,
+  bank_type         text check (bank_type in ('vista', 'corriente')),
+  terms_accepted_at timestamptz,
+  onboarded         boolean default false,
+  created_at        timestamptz default now(),
+  updated_at        timestamptz default now()
+);
+
 -- messages (mock)
 create table if not exists public.messages (
   id          uuid default gen_random_uuid() primary key,
@@ -313,3 +342,41 @@ create policy "Host can view own messages"
 create policy "Authenticated users can send messages"
   on public.messages for insert
   with check (auth.uid() = sender_id);
+
+-- ─── ONBOARDING INVITES ───
+
+alter table public.onboarding_invites enable row level security;
+
+-- SELECT: admin only (tokens are validated via service role)
+create policy "Admin can view onboarding invites"
+  on public.onboarding_invites for select
+  using (public.is_admin());
+
+-- INSERT: admin only
+create policy "Admin can create onboarding invites"
+  on public.onboarding_invites for insert
+  with check (public.is_admin());
+
+-- UPDATE: admin only (for marking used)
+create policy "Admin can update onboarding invites"
+  on public.onboarding_invites for update
+  using (public.is_admin());
+
+-- ─── HOST PROFILES ───
+
+alter table public.host_profiles enable row level security;
+
+-- SELECT: host sees own, admin sees all
+create policy "Host can view own host_profile"
+  on public.host_profiles for select
+  using (host_id = public.my_host_id() or public.is_admin());
+
+-- INSERT: admin (created during onboarding via service role)
+create policy "Admin can create host_profiles"
+  on public.host_profiles for insert
+  with check (public.is_admin());
+
+-- UPDATE: host can update own, admin can update all
+create policy "Host can update own host_profile"
+  on public.host_profiles for update
+  using (host_id = public.my_host_id() or public.is_admin());
