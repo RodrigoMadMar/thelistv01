@@ -204,7 +204,9 @@ export async function completeOnboarding(data: {
 
   if (!appData) return { error: "Postulación no encontrada" };
 
-  // 3. Create user account with password
+  // 3. Create user account with password (or reuse existing)
+  let userId: string;
+
   const { data: authData, error: authError } = await admin.auth.admin.createUser({
     email: invite.email,
     password: data.password,
@@ -214,8 +216,23 @@ export async function completeOnboarding(data: {
     },
   });
 
-  if (authError) return { error: "Error creando cuenta: " + authError.message };
-  const userId = authData.user.id;
+  if (authError) {
+    // If user already exists, look them up and update their password
+    if (authError.message.includes("already been registered")) {
+      const { data: users, error: listError } = await admin.auth.admin.listUsers();
+      if (listError) return { error: "Error buscando usuario existente" };
+      const existingUser = users.users.find((u) => u.email === invite.email);
+      if (!existingUser) return { error: "No se encontró el usuario existente" };
+      userId = existingUser.id;
+
+      // Update password for the existing user
+      await admin.auth.admin.updateUser(userId, { password: data.password });
+    } else {
+      return { error: "Error creando cuenta: " + authError.message };
+    }
+  } else {
+    userId = authData.user.id;
+  }
 
   // 4. Update profile role to host
   await admin
