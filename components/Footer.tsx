@@ -78,7 +78,7 @@ export default function Footer() {
             Instagram
           </a>
           <a
-            href="#"
+            href="/host/apply"
             className="block text-[13px] text-brand-silver/50 hover:text-brand-white transition-colors mb-[10px]"
           >
             Postular como host

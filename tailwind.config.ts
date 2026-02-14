@@ -9,6 +9,8 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
+          DEFAULT: "rgba(199, 203, 209, 0.07)",
+          hover: "rgba(199, 203, 209, 0.2)",
           black: "#07080A",
           white: "#F2F2EE",
           smoke: "#8A8F98",
