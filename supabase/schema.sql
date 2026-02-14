@@ -89,6 +89,30 @@ create table if not exists public.plans (
   updated_at        timestamptz default now()
 );
 
+-- public_applications (postulaciones sin cuenta, desde el wizard público)
+create table if not exists public.public_applications (
+  id                  uuid default gen_random_uuid() primary key,
+  experience_name     text not null,
+  email               text not null,
+  phone               text not null,
+  host_name           text,
+  location            text not null,
+  description         text not null,
+  commercial_contact  text not null,
+  daily_capacity      integer not null,
+  price_clp           integer not null,
+  days_of_week        text[] not null,
+  schedule            jsonb not null,
+  media_urls          text[],
+  exclusivity_confirmed boolean default false,
+  status              text default 'pending'
+                        check (status in ('pending', 'approved', 'rejected')),
+  admin_comment       text,
+  reviewed_by         uuid references public.profiles(id),
+  reviewed_at         timestamptz,
+  created_at          timestamptz default now()
+);
+
 -- reservations (mock)
 create table if not exists public.reservations (
   id          uuid default gen_random_uuid() primary key,
@@ -141,12 +165,13 @@ create trigger on_auth_user_created
 -- ────────────────────────────────────────────────────────────
 
 -- Enable RLS on all tables
-alter table public.profiles    enable row level security;
-alter table public.hosts       enable row level security;
-alter table public.applications enable row level security;
-alter table public.plans       enable row level security;
-alter table public.reservations enable row level security;
-alter table public.messages    enable row level security;
+alter table public.profiles              enable row level security;
+alter table public.hosts                 enable row level security;
+alter table public.applications          enable row level security;
+alter table public.public_applications   enable row level security;
+alter table public.plans                 enable row level security;
+alter table public.reservations          enable row level security;
+alter table public.messages              enable row level security;
 
 -- ── Helper: check if current user is admin ──
 create or replace function public.is_admin()
@@ -215,6 +240,23 @@ create policy "Host can create application"
 -- UPDATE: only admin
 create policy "Admin can update applications"
   on public.applications for update
+  using (public.is_admin());
+
+-- ─── PUBLIC APPLICATIONS ───
+
+-- INSERT: anyone can submit (no auth required)
+create policy "Anyone can submit public applications"
+  on public.public_applications for insert
+  with check (true);
+
+-- SELECT: only admin
+create policy "Admin can view public applications"
+  on public.public_applications for select
+  using (public.is_admin());
+
+-- UPDATE: only admin
+create policy "Admin can update public applications"
+  on public.public_applications for update
   using (public.is_admin());
 
 -- ─── PLANS ───

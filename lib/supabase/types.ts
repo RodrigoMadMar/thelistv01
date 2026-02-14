@@ -79,6 +79,28 @@ export interface Application {
   created_at: string;
 }
 
+export interface PublicApplication {
+  id: string;
+  experience_name: string;
+  email: string;
+  phone: string;
+  host_name: string | null;
+  location: string;
+  description: string;
+  commercial_contact: string;
+  daily_capacity: number;
+  price_clp: number;
+  days_of_week: string[];
+  schedule: ScheduleSlot[];
+  media_urls: string[] | null;
+  exclusivity_confirmed: boolean;
+  status: ApplicationStatus;
+  admin_comment: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
 export interface Plan {
   id: string;
   application_id: string | null;
