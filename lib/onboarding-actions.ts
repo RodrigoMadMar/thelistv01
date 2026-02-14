@@ -227,7 +227,7 @@ export async function completeOnboarding(data: {
       userId = existingUser.id;
 
       // Update password for the existing user
-      await admin.auth.admin.updateUser(userId, { password: data.password });
+      await admin.auth.admin.updateUserById(userId, { password: data.password });
     } else {
       return { error: "Error creando cuenta: " + authError.message };
     }
