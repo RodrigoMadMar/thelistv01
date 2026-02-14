@@ -208,6 +208,22 @@ export default function Drops() {
     }
   }, [drops]);
 
+  /* ── Listen for openDrop events from other components (e.g. Salas) ── */
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { id } = (e as CustomEvent<{ id: string }>).detail;
+      const found = drops.find((d) => d.id === id);
+      if (found) {
+        setActiveDrop(found);
+        const url = new URL(window.location.href);
+        url.searchParams.set("drop", found.id);
+        window.history.replaceState({}, "", url.toString());
+      }
+    };
+    window.addEventListener("openDrop", handler);
+    return () => window.removeEventListener("openDrop", handler);
+  }, [drops]);
+
   const openDrop = useCallback((drop: DropData) => {
     setActiveDrop(drop);
     const url = new URL(window.location.href);

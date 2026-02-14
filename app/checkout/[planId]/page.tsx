@@ -485,7 +485,7 @@ export default function CheckoutPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full font-sans text-[13px] font-medium tracking-[0.08em] uppercase px-8 py-[14px] rounded-full bg-brand-white text-brand-black hover:-translate-y-px transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full font-sans text-[13px] font-medium tracking-[0.08em] uppercase px-8 py-[14px] rounded-full bg-brand-lime text-brand-black hover:-translate-y-px transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting ? "Procesando..." : `Pagar ${formatCLP(total)}`}
               </button>
@@ -588,7 +588,7 @@ export default function CheckoutPage() {
                     form?.requestSubmit();
                   }}
                   disabled={submitting}
-                  className="w-full font-sans text-[13px] font-medium tracking-[0.08em] uppercase px-8 py-[14px] rounded-full bg-brand-white text-brand-black hover:-translate-y-px transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full font-sans text-[13px] font-medium tracking-[0.08em] uppercase px-8 py-[14px] rounded-full bg-brand-lime text-brand-black hover:-translate-y-px transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? "Procesando..." : `Pagar ${formatCLP(total)}`}
                 </button>
