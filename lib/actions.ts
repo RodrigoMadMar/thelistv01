@@ -367,3 +367,41 @@ export async function updatePlanStatus(
   if (error) return { error: error.message };
   return { success: true };
 }
+
+// ── Host requests a change on a plan ──
+
+export async function requestPlanChange(planId: string, message: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  // Verify the host owns this plan
+  const { data: host } = await supabase
+    .from("hosts")
+    .select("id")
+    .eq("profile_id", user.id)
+    .single();
+
+  if (!host) return { error: "Host not found" };
+
+  const { data: plan } = await supabase
+    .from("plans")
+    .select("id, host_id")
+    .eq("id", planId)
+    .eq("host_id", host.id)
+    .single();
+
+  if (!plan) return { error: "Plan not found" };
+
+  // Send a message to the admin via the messages table
+  const { error } = await supabase.from("messages").insert({
+    host_id: host.id,
+    sender_id: user.id,
+    content: `[Solicitud de cambio — Plan ${planId}]\n\n${message}`,
+  });
+
+  if (error) return { error: error.message };
+  return { success: true };
+}
