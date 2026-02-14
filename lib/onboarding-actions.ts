@@ -46,6 +46,56 @@ export async function generateOnboardingInvite(
   return { success: true, token };
 }
 
+// ── Regenerate onboarding invite (admin only, invalidates previous) ──
+
+export async function regenerateOnboardingInvite(inviteId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!serviceRoleKey || !supabaseUrl) {
+    return { error: "Server configuration missing" };
+  }
+  const admin = createAdminClient(supabaseUrl, serviceRoleKey);
+
+  // Get the existing invite
+  const { data: oldInvite, error: fetchError } = await admin
+    .from("onboarding_invites")
+    .select("*")
+    .eq("id", inviteId)
+    .single();
+
+  if (fetchError || !oldInvite) return { error: "Invite no encontrado" };
+
+  // Mark old invite as used (invalidate)
+  await admin
+    .from("onboarding_invites")
+    .update({ used_at: new Date().toISOString() })
+    .eq("id", inviteId);
+
+  // Generate new token
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7);
+
+  const { error: insertError } = await admin.from("onboarding_invites").insert({
+    application_id: oldInvite.application_id,
+    application_type: oldInvite.application_type,
+    email: oldInvite.email,
+    token,
+    expires_at: expiresAt.toISOString(),
+    created_by: user.id,
+  });
+
+  if (insertError) return { error: insertError.message };
+
+  return { success: true, token };
+}
+
 // ── Validate onboarding token (no auth required) ──
 
 export async function validateOnboardingToken(token: string) {
