@@ -59,6 +59,20 @@ export interface ScheduleSlot {
   end: string;   // "HH:MM"
 }
 
+export interface TimeSlot {
+  time: string;     // "HH:MM"
+  capacity: number;
+}
+
+export interface TicketHolder {
+  name: string;
+  rut: string;
+  email: string;
+}
+
+export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+export type PaymentProvider = "mercadopago" | "transbank";
+
 export interface Application {
   id: string;
   host_id: string;
@@ -117,6 +131,8 @@ export interface Plan {
   media_urls: string[] | null;
   schedule: ScheduleSlot[] | null;
   days_of_week: string[] | null;
+  is_nominal: boolean;
+  time_slots: TimeSlot[] | null;
   status: PlanStatus;
   drop_number: number;
   badges: Badge[] | null;
@@ -133,7 +149,16 @@ export interface Reservation {
   num_people: number;
   date: string;
   time_slot: string | null;
+  subtotal: number;
+  service_fee: number;
   total_price: number;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  contact_rut: string | null;
+  ticket_holders: TicketHolder[] | null;
+  payment_status: PaymentStatus;
+  payment_provider: PaymentProvider | null;
   status: ReservationStatus;
   created_at: string;
 }

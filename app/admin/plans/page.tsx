@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { updatePlanStatus } from "@/lib/actions";
+import { applyServiceFee } from "@/lib/pricing";
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   draft: { label: "Borrador", className: "text-brand-smoke bg-brand-smoke/10" },
@@ -76,7 +77,10 @@ export default function AdminPlansPage() {
                   <td className="py-3 px-2">
                     <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase tracking-[0.08em] ${badge.className}`}>{badge.label}</span>
                   </td>
-                  <td className="py-3 px-2 text-right text-brand-white">${plan.price_clp?.toLocaleString("es-CL")}</td>
+                  <td className="py-3 px-2 text-right">
+                    <div className="text-brand-white">${applyServiceFee(plan.price_clp).toLocaleString("es-CL")}</div>
+                    <div className="text-[10px] text-brand-smoke/50">Host: ${plan.price_clp?.toLocaleString("es-CL")}</div>
+                  </td>
                   <td className="py-3 px-2 text-right text-brand-smoke">{plan.capacity}</td>
                   <td className="py-3 px-2 text-right">
                     <div className="flex gap-2 justify-end">

@@ -5,6 +5,7 @@ import DropCard, { DropData } from "./DropCard";
 import DropOverlay from "./DropOverlay";
 import { createClient } from "@/lib/supabase/client";
 import type { Plan } from "@/lib/supabase/types";
+import { applyServiceFee } from "@/lib/pricing";
 
 /* ── Static fallback data (original hardcoded drops) ── */
 const fallbackDrops: DropData[] = [
@@ -27,8 +28,8 @@ const fallbackDrops: DropData[] = [
     status: "last_seats",
     sala: "La Buena Mesa",
     seats: 3,
-    price: "$45.000",
-    unitPrice: 45000,
+    price: "$49.500",
+    unitPrice: 49500,
   },
   {
     id: "013",
@@ -48,8 +49,8 @@ const fallbackDrops: DropData[] = [
     status: "members_first",
     sala: "Outdoor",
     seats: 8,
-    price: "$38.000",
-    unitPrice: 38000,
+    price: "$41.800",
+    unitPrice: 41800,
   },
   {
     id: "012",
@@ -69,8 +70,8 @@ const fallbackDrops: DropData[] = [
     status: "this_week",
     sala: "Arte & Experimental",
     seats: 4,
-    price: "$32.000",
-    unitPrice: 32000,
+    price: "$35.200",
+    unitPrice: 35200,
   },
   {
     id: "011",
@@ -88,8 +89,8 @@ const fallbackDrops: DropData[] = [
     status: "sold_out",
     sala: "Outdoor",
     seats: null,
-    price: "$280.000",
-    unitPrice: 280000,
+    price: "$308.000",
+    unitPrice: 308000,
   },
   {
     id: "010",
@@ -108,8 +109,8 @@ const fallbackDrops: DropData[] = [
     status: "last_seats",
     sala: "Fiestas & Sesiones",
     seats: 2,
-    price: "$25.000",
-    unitPrice: 25000,
+    price: "$27.500",
+    unitPrice: 27500,
   },
   {
     id: "009",
@@ -129,8 +130,8 @@ const fallbackDrops: DropData[] = [
     status: "small_group",
     sala: "Bar & Vino",
     seats: 6,
-    price: "$62.000",
-    unitPrice: 62000,
+    price: "$68.200",
+    unitPrice: 68200,
   },
 ];
 
@@ -143,7 +144,8 @@ function planToDropData(plan: Plan): DropData {
     src: url,
   }));
 
-  const priceStr = "$" + plan.price_clp.toLocaleString("es-CL");
+  const customerPrice = applyServiceFee(plan.price_clp);
+  const priceStr = "$" + customerPrice.toLocaleString("es-CL");
 
   let time: string | undefined;
   if (plan.schedule && Array.isArray(plan.schedule) && plan.schedule.length > 0) {
@@ -164,7 +166,9 @@ function planToDropData(plan: Plan): DropData {
     sala: plan.sala,
     seats: plan.capacity > 0 ? plan.capacity : null,
     price: priceStr,
-    unitPrice: plan.price_clp,
+    unitPrice: customerPrice,
+    isNominal: plan.is_nominal,
+    timeSlots: plan.time_slots,
   };
 }
 
