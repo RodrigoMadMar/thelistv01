@@ -23,15 +23,14 @@ export default function Hero({ onOpenDoor }: HeroProps) {
 
       {/* Headline */}
       <h1 className="font-serif text-[clamp(52px,8vw,110px)] font-normal leading-[1.0] tracking-tight text-brand-white mb-7 opacity-0 animate-fade-up animation-delay-400">
-        The list
+        La lista
         <br />
-        is <em className="italic font-normal">short.</em>
+        es <em className="italic font-normal">corta.</em>
       </h1>
 
       {/* Sub */}
       <p className="text-[15px] font-light text-brand-smoke max-w-[380px] leading-[1.7] mb-12 opacity-0 animate-fade-up animation-delay-600">
-        Desbloquea experiencias curadas según tu energía. Sin catálogos, sin
-        ruido. Solo lo que vale.
+        Planes elegidos según tu mood.
       </p>
 
       {/* Actions */}
@@ -40,7 +39,7 @@ export default function Hero({ onOpenDoor }: HeroProps) {
           onClick={onOpenDoor}
           className="inline-flex items-center gap-2 font-sans text-xs font-medium tracking-[0.08em] uppercase text-brand-black bg-brand-white border-none px-9 py-[14px] rounded-full hover:bg-white hover:-translate-y-[2px] hover:shadow-[0_12px_40px_rgba(242,242,238,0.08)] transition-all duration-300"
         >
-          Desbloquear tu lista
+          Prueba THE DOOR
           <svg
             width="14"
             height="14"
