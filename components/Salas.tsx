@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Plan } from "@/lib/supabase/types";
 import { applyServiceFee } from "@/lib/pricing";
@@ -137,6 +138,17 @@ const fallbackExperiences: Record<string, SalaExperience[]> = {
     },
   ],
 };
+
+function toSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
 export default function Salas() {
   const [activeSala, setActiveSala] = useState<string | null>(null);
@@ -312,10 +324,29 @@ export default function Salas() {
               {activeSala}
             </span>
             <span className="flex-1 h-px bg-brand" />
-            <span className="text-[10px] text-brand-smoke/40">
+            <span className="text-[10px] text-brand-smoke/40 mr-2">
               {activeExperiences.length}{" "}
               {activeExperiences.length === 1 ? "experiencia" : "experiencias"}
             </span>
+            {activeSala && (
+              <Link
+                href={`/salas/${toSlug(activeSala)}`}
+                className="flex items-center gap-1 text-[10px] tracking-[0.08em] uppercase text-brand-smoke hover:text-brand-lime transition-colors"
+              >
+                Ver todos
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
+              </Link>
+            )}
           </div>
 
           {/* Horizontal scroll of experience tickets */}
