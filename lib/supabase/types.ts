@@ -202,3 +202,25 @@ export interface HostProfile {
   created_at: string;
   updated_at: string;
 }
+
+export type CandidateStatus = "new" | "contacted" | "interested" | "rejected" | "onboarded";
+
+export interface Candidate {
+  id: string;
+  name: string;
+  category: string | null;
+  location: string | null;
+  description: string | null;
+  instagram: string | null;
+  website: string | null;
+  email: string | null;
+  phone: string | null;
+  score: number;
+  reason: string | null;
+  source_query: string | null;
+  status: CandidateStatus;
+  contacted_at: string | null;
+  outreach_email: string | null;
+  created_at: string;
+  updated_at: string;
+}
