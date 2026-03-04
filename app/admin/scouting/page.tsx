@@ -89,6 +89,48 @@ export default function ScoutingPage() {
     html: string;
   } | null>(null);
 
+  /* ── Scout search state ── */
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchLocation, setSearchLocation] = useState("");
+  const [scouting, setScouting] = useState(false);
+
+  const handleScoutSearch = async () => {
+    if (!searchQuery.trim() || searchQuery.trim().length < 3) {
+      setToast({ message: "Escribe al menos 3 caracteres", type: "error" });
+      return;
+    }
+
+    setScouting(true);
+    try {
+      const res = await fetch("/api/scout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: searchQuery.trim(),
+          location: searchLocation.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setToast({ message: data.error || "Error en la búsqueda", type: "error" });
+      } else {
+        setToast({
+          message: data.savedCount > 0
+            ? `${data.savedCount} candidato${data.savedCount > 1 ? "s" : ""} encontrado${data.savedCount > 1 ? "s" : ""}: ${data.savedNames.join(", ")}`
+            : "Búsqueda completada — sin candidatos nuevos",
+          type: data.savedCount > 0 ? "success" : "error",
+        });
+        fetchCandidates();
+      }
+    } catch {
+      setToast({ message: "Error de conexión", type: "error" });
+    } finally {
+      setScouting(false);
+    }
+  };
+
   /* ── Fetch candidates ── */
   const fetchCandidates = useCallback(async () => {
     const supabase = createClient();
@@ -205,6 +247,57 @@ export default function ScoutingPage() {
         </div>
       </div>
 
+      {/* ── Search bar ── */}
+      <div className="mb-8 bg-brand-surface border border-brand rounded-[12px] p-5">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 min-w-0">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !scouting && handleScoutSearch()}
+              placeholder="Ej: cata privada vinos naturales, chef experiencia íntima..."
+              disabled={scouting}
+              className="w-full bg-brand-black border border-brand rounded-lg px-4 py-2.5 text-[13px] text-brand-white placeholder:text-brand-smoke/30 focus:outline-none focus:border-brand-smoke/30 disabled:opacity-50 transition-colors"
+            />
+          </div>
+          <input
+            type="text"
+            value={searchLocation}
+            onChange={(e) => setSearchLocation(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && !scouting && handleScoutSearch()}
+            placeholder="Ubicación (opcional)"
+            disabled={scouting}
+            className="sm:w-[180px] bg-brand-black border border-brand rounded-lg px-4 py-2.5 text-[13px] text-brand-white placeholder:text-brand-smoke/30 focus:outline-none focus:border-brand-smoke/30 disabled:opacity-50 transition-colors"
+          />
+          <button
+            onClick={handleScoutSearch}
+            disabled={scouting || searchQuery.trim().length < 3}
+            className="px-6 py-2.5 bg-brand-lime text-brand-black text-[11px] font-medium tracking-[0.06em] uppercase rounded-lg hover:-translate-y-px transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 cursor-pointer flex items-center justify-center gap-2 shrink-0"
+          >
+            {scouting ? (
+              <>
+                <span className="w-3.5 h-3.5 border-2 border-brand-black/30 border-t-brand-black rounded-full animate-spin" />
+                Buscando…
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                Buscar
+              </>
+            )}
+          </button>
+        </div>
+        {scouting && (
+          <p className="mt-3 text-[11px] text-brand-smoke/40 animate-pulse">
+            El agente está buscando candidatos… esto puede tomar hasta 1 minuto.
+          </p>
+        )}
+      </div>
+
       {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -217,15 +310,9 @@ export default function ScoutingPage() {
           </div>
           <p className="text-[13px] text-brand-smoke/40">
             {filter === "all"
-              ? "Ejecuta el agente de scouting para encontrar candidatos."
+              ? "Usa la barra de búsqueda para encontrar candidatos."
               : "No hay candidatos con este estado."}
           </p>
-          {filter === "all" && (
-            <code className="block mt-4 text-[11px] text-brand-smoke/30 bg-brand-surface px-4 py-2 rounded-lg inline-block">
-              npx tsx scripts/scout-agent.ts &quot;cata privada vinos
-              Santiago&quot;
-            </code>
-          )}
         </div>
       ) : (
         <div className="space-y-3">
