@@ -192,7 +192,7 @@ Comienza la búsqueda ahora.`,
     ];
 
     let turns = 0;
-    const maxTurns = 15;
+    const maxTurns = 5;
     let savedCount = 0;
     const savedNames: string[] = [];
 
