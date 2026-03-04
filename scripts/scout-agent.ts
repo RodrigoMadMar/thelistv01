@@ -107,57 +107,36 @@ const tools: Anthropic.Tool[] = [
   },
 ];
 
-/* ── Web search implementation ── */
+/* ── Web search via Tavily ── */
 async function executeWebSearch(query: string): Promise<string> {
-  // Try Tavily if API key is available
   const tavilyKey = process.env.TAVILY_API_KEY;
-  if (tavilyKey) {
-    try {
-      const res = await fetch("https://api.tavily.com/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          api_key: tavilyKey,
-          query,
-          search_depth: "advanced",
-          max_results: 8,
-          include_answer: true,
-        }),
-      });
-      const data = await res.json();
-      const results = data.results
-        ?.map(
-          (r: { title: string; url: string; content: string }) =>
-            `[${r.title}](${r.url})\n${r.content}`,
-        )
-        .join("\n\n");
-      return `Search results for "${query}":\n\n${data.answer || ""}\n\n${results || "No results found."}`;
-    } catch (err) {
-      return `Search failed: ${(err as Error).message}. Try a different query.`;
-    }
+  if (!tavilyKey) {
+    return `⚠️ TAVILY_API_KEY not configured. Add it to your environment variables to enable web search.`;
   }
 
-  // Fallback: use Google Custom Search if configured
-  const googleKey = process.env.GOOGLE_SEARCH_API_KEY;
-  const googleCx = process.env.GOOGLE_SEARCH_CX;
-  if (googleKey && googleCx) {
-    try {
-      const url = `https://www.googleapis.com/customsearch/v1?key=${googleKey}&cx=${googleCx}&q=${encodeURIComponent(query)}&num=8`;
-      const res = await fetch(url);
-      const data = await res.json();
-      const results = data.items
-        ?.map(
-          (r: { title: string; link: string; snippet: string }) =>
-            `[${r.title}](${r.link})\n${r.snippet}`,
-        )
-        .join("\n\n");
-      return `Search results for "${query}":\n\n${results || "No results found."}`;
-    } catch (err) {
-      return `Search failed: ${(err as Error).message}`;
-    }
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: tavilyKey,
+        query,
+        search_depth: "advanced",
+        max_results: 8,
+        include_answer: true,
+      }),
+    });
+    const data = await res.json();
+    const results = data.results
+      ?.map(
+        (r: { title: string; url: string; content: string }) =>
+          `[${r.title}](${r.url})\n${r.content}`,
+      )
+      .join("\n\n");
+    return `Search results for "${query}":\n\n${data.answer || ""}\n\n${results || "No results found."}`;
+  } catch (err) {
+    return `Search failed: ${(err as Error).message}. Try a different query.`;
   }
-
-  return `⚠️ No search API configured. Set TAVILY_API_KEY or GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_CX in your environment.\n\nFor now, reason about what you know about the Chilean experience market for the query: "${query}". Use your knowledge to suggest realistic candidates that would fit thelist.cl.`;
 }
 
 /* ── Save candidate to Supabase ── */
