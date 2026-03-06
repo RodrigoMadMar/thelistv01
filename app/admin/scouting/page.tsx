@@ -41,6 +41,12 @@ const STATUS_CONFIG: Record<
   },
 };
 
+const SOURCE_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
+  google_maps: { label: "Google Maps", icon: "📍", color: "text-blue-400 bg-blue-400/10 border-blue-400/20" },
+  comino: { label: "Comino.cl", icon: "🌶️", color: "text-orange-400 bg-orange-400/10 border-orange-400/20" },
+  web_search: { label: "Web", icon: "🔍", color: "text-purple-400 bg-purple-400/10 border-purple-400/20" },
+};
+
 const CATEGORY_OPTIONS = [
   "La Buena Mesa",
   "Bar & Vino",
@@ -88,6 +94,7 @@ export default function ScoutingPage() {
     name: string;
     html: string;
   } | null>(null);
+  const [generatingEmailId, setGeneratingEmailId] = useState<string | null>(null);
 
   /* ── Scout search state ── */
   const [searchQuery, setSearchQuery] = useState("");
@@ -183,6 +190,41 @@ export default function ScoutingPage() {
       setToast({ message: result.error, type: "error" });
     } else {
       fetchCandidates();
+    }
+  };
+
+  /* ── Generate draft email (preview only, no send) ── */
+  const handleGenerateEmail = async (candidate: Candidate) => {
+    setGeneratingEmailId(candidate.id);
+    try {
+      const res = await fetch("/api/scout/generate-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidateId: candidate.id }),
+      });
+      const data = await res.json();
+      if (data.html) {
+        // Save draft to DB
+        const supabase = createClient();
+        await supabase
+          .from("candidates")
+          .update({ outreach_email: data.html })
+          .eq("id", candidate.id);
+
+        // Update local state
+        setCandidates((prev) =>
+          prev.map((c) =>
+            c.id === candidate.id ? { ...c, outreach_email: data.html } : c,
+          ),
+        );
+        setPreviewEmail({ name: candidate.name, html: data.html });
+      } else {
+        setToast({ message: data.error || "Error generando email", type: "error" });
+      }
+    } catch {
+      setToast({ message: "Error de conexión", type: "error" });
+    } finally {
+      setGeneratingEmailId(null);
     }
   };
 
@@ -338,6 +380,25 @@ export default function ScoutingPage() {
                         {cfg.label}
                       </span>
                       <ScoreBar score={candidate.score} />
+
+                      {/* Source badges */}
+                      {candidate.sources && candidate.sources.length > 0 && (
+                        <div className="flex items-center gap-1 ml-1">
+                          {candidate.sources.map((src) => {
+                            const srcCfg = SOURCE_CONFIG[src];
+                            if (!srcCfg) return null;
+                            return (
+                              <span
+                                key={src}
+                                className={`px-1.5 py-0.5 rounded border text-[8px] tracking-wider uppercase ${srcCfg.color}`}
+                                title={srcCfg.label}
+                              >
+                                {srcCfg.icon} {srcCfg.label}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-brand-smoke/50 mb-2">
@@ -408,8 +469,26 @@ export default function ScoutingPage() {
 
                   {/* Right: Actions */}
                   <div className="flex items-center gap-2 shrink-0">
-                    {/* Contactar */}
-                    {candidate.status === "new" && candidate.email && (
+                    {/* Generar email (draft) */}
+                    {!candidate.outreach_email && (
+                      <button
+                        onClick={() => handleGenerateEmail(candidate)}
+                        disabled={generatingEmailId === candidate.id}
+                        className="px-4 py-2 border border-purple-400/30 text-purple-400 text-[11px] font-medium tracking-[0.06em] uppercase rounded-full hover:bg-purple-400/10 hover:-translate-y-px transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {generatingEmailId === candidate.id ? (
+                          <span className="flex items-center gap-2">
+                            <span className="w-3 h-3 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                            Generando…
+                          </span>
+                        ) : (
+                          "Generar email"
+                        )}
+                      </button>
+                    )}
+
+                    {/* Contactar (send email) */}
+                    {candidate.status === "new" && candidate.email && candidate.outreach_email && (
                       <button
                         onClick={() => handleContact(candidate.id)}
                         disabled={isSending}
@@ -421,12 +500,12 @@ export default function ScoutingPage() {
                             Enviando…
                           </span>
                         ) : (
-                          "Contactar"
+                          "Enviar email"
                         )}
                       </button>
                     )}
 
-                    {/* Ver email enviado */}
+                    {/* Ver email (draft or sent) */}
                     {candidate.outreach_email && (
                       <button
                         onClick={() =>

@@ -302,8 +302,14 @@ const tools: Anthropic.Tool[] = [
           type: "string",
           description: "Brief explanation of why this candidate scored this way",
         },
+        sources: {
+          type: "array",
+          items: { type: "string", enum: ["google_maps", "comino", "web_search"] },
+          description:
+            "Which sources this candidate was found in. E.g. ['google_maps', 'web_search']",
+        },
       },
-      required: ["name", "category", "description", "score", "reason"],
+      required: ["name", "category", "description", "score", "reason", "sources"],
     },
   },
 ];
@@ -382,7 +388,8 @@ Tienes 3 fuentes de búsqueda. **DEBES usar las 3** para maximizar resultados:
 3. Usa web_search para completar info (Instagram, email, reseñas) de los candidatos encontrados
 4. Para cada hallazgo interesante, evalúa su fit con thelist
 5. Guarda solo candidatos con score >= 6 usando save_candidate
-6. Intenta encontrar al menos 3-5 candidatos de calidad
+6. SIEMPRE incluye el campo "sources" indicando de dónde encontraste al candidato (google_maps, comino, web_search)
+7. Intenta encontrar al menos 3-5 candidatos de calidad
 
 Comienza la búsqueda ahora.`,
       },
@@ -437,6 +444,7 @@ Comienza la búsqueda ahora.`,
               email: input.email || null,
               score: input.score || 0,
               reason: input.reason || null,
+              sources: input.sources || [],
               source_query: seedQuery,
               status: "new",
             });
