@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { label: "Invites", href: "/admin/invites" },
   { label: "Hosts", href: "/admin/hosts" },
   { label: "Planes", href: "/admin/plans" },
+  { label: "Scouting", href: "/admin/scouting" },
 ];
 
 export default function AdminSidebar({ children }: { children: React.ReactNode }) {
