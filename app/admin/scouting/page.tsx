@@ -93,6 +93,7 @@ export default function ScoutingPage() {
   const [previewEmail, setPreviewEmail] = useState<{
     name: string;
     html: string;
+    email?: string;
   } | null>(null);
   const [generatingEmailId, setGeneratingEmailId] = useState<string | null>(null);
 
@@ -217,7 +218,7 @@ export default function ScoutingPage() {
             c.id === candidate.id ? { ...c, outreach_email: data.html } : c,
           ),
         );
-        setPreviewEmail({ name: candidate.name, html: data.html });
+        setPreviewEmail({ name: candidate.name, html: data.html, email: candidate.email || undefined });
       } else {
         setToast({ message: data.error || "Error generando email", type: "error" });
       }
@@ -417,10 +418,19 @@ export default function ScoutingPage() {
                         </span>
                       )}
                       {candidate.email && (
-                        <span>
-                          <span className="text-brand-smoke/30">Email:</span>{" "}
+                        <span
+                          className="text-emerald-400 cursor-pointer hover:text-emerald-300 transition-colors"
+                          title="Copiar email"
+                          onClick={() => {
+                            navigator.clipboard.writeText(candidate.email!);
+                            setToast({ message: `Email copiado: ${candidate.email}`, type: "success" });
+                          }}
+                        >
                           {candidate.email}
                         </span>
+                      )}
+                      {!candidate.email && (
+                        <span className="text-brand-smoke/25 italic">Sin email</span>
                       )}
                       {candidate.instagram && (
                         <a
@@ -500,7 +510,7 @@ export default function ScoutingPage() {
                             Enviando…
                           </span>
                         ) : (
-                          "Enviar email"
+                          <>Enviar a {candidate.email}</>
                         )}
                       </button>
                     )}
@@ -512,6 +522,7 @@ export default function ScoutingPage() {
                           setPreviewEmail({
                             name: candidate.name,
                             html: candidate.outreach_email!,
+                            email: candidate.email || undefined,
                           })
                         }
                         className="px-3 py-2 border border-brand text-[11px] text-brand-smoke hover:text-brand-white hover:border-brand-hover rounded-full transition-colors cursor-pointer"
@@ -587,27 +598,57 @@ export default function ScoutingPage() {
             onClick={() => setPreviewEmail(null)}
           />
           <div className="relative w-full max-w-[600px] max-h-[80vh] overflow-y-auto bg-brand-surface border border-brand rounded-[14px] animate-fade-up">
-            <div className="sticky top-0 flex items-center justify-between p-4 border-b border-brand bg-brand-surface/90 backdrop-blur-[8px] z-10">
-              <span className="text-[13px] text-brand-smoke">
-                Email enviado a{" "}
-                <span className="text-brand-white">{previewEmail.name}</span>
-              </span>
-              <button
-                onClick={() => setPreviewEmail(null)}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5 transition-colors text-brand-smoke hover:text-brand-white border-none cursor-pointer"
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
+            <div className="sticky top-0 flex flex-col gap-2 p-4 border-b border-brand bg-brand-surface/90 backdrop-blur-[8px] z-10">
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] text-brand-smoke">
+                  Email para{" "}
+                  <span className="text-brand-white">{previewEmail.name}</span>
+                  {previewEmail.email && (
+                    <>
+                      {" — "}
+                      <span className="text-emerald-400">{previewEmail.email}</span>
+                    </>
+                  )}
+                </span>
+                <button
+                  onClick={() => setPreviewEmail(null)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5 transition-colors text-brand-smoke hover:text-brand-white border-none cursor-pointer"
                 >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(previewEmail.html);
+                    setToast({ message: "HTML copiado al portapapeles", type: "success" });
+                  }}
+                  className="px-3 py-1.5 text-[10px] font-medium tracking-wider uppercase border border-brand text-brand-smoke hover:text-brand-white hover:border-brand-hover rounded-full transition-colors cursor-pointer"
+                >
+                  Copiar HTML
+                </button>
+                {previewEmail.email && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(previewEmail.email!);
+                      setToast({ message: `Email copiado: ${previewEmail.email}`, type: "success" });
+                    }}
+                    className="px-3 py-1.5 text-[10px] font-medium tracking-wider uppercase border border-emerald-400/30 text-emerald-400 hover:bg-emerald-400/10 rounded-full transition-colors cursor-pointer"
+                  >
+                    Copiar email
+                  </button>
+                )}
+              </div>
             </div>
             <div
               className="p-6"
