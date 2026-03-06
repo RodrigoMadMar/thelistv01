@@ -153,7 +153,7 @@ Comienza la búsqueda ahora.`,
       turns++;
 
       const response = await anthropic.messages.create({
-        model: "claude-sonnet-4-6-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 4096,
         tools,
         messages,
