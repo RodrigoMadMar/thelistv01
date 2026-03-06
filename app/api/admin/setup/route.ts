@@ -8,29 +8,50 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-function requireKey(req: NextRequest) {
+/**
+ * Check auth: if SCOUT_ADMIN_KEY is set, require it.
+ * If no SCOUT_ADMIN_KEY is configured AND no admins exist yet, allow access (first-time setup).
+ */
+async function requireAuth(req: NextRequest, supabase: ReturnType<typeof getSupabase>) {
   const { searchParams } = new URL(req.url);
   const key = req.headers.get("x-scout-key") || searchParams.get("key");
-  if (!key || key !== process.env.SCOUT_ADMIN_KEY) {
-    throw new Error("Unauthorized");
+
+  // If SCOUT_ADMIN_KEY is configured, require it
+  if (process.env.SCOUT_ADMIN_KEY) {
+    if (!key || key !== process.env.SCOUT_ADMIN_KEY) {
+      throw new Error("Unauthorized");
+    }
+    return;
+  }
+
+  // No SCOUT_ADMIN_KEY configured — only allow if zero admins exist (first-time setup)
+  const { data: admins } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("role", "admin")
+    .limit(1);
+
+  if (admins && admins.length > 0) {
+    throw new Error("Unauthorized - SCOUT_ADMIN_KEY required (admins already exist)");
   }
 }
 
 /**
- * GET /api/admin/setup?key=YOUR_SCOUT_KEY&email=contacto@thelist.cl
+ * GET /api/admin/setup?email=contacto@thelist.cl
+ *
+ * First-time setup: no key needed if no admins exist yet.
+ * After first admin is created: requires ?key=SCOUT_ADMIN_KEY
  *
  * If email is provided: promotes that user to admin
  * If no email: lists all profiles
- *
- * Can be opened directly in the browser!
  */
 export async function GET(req: NextRequest) {
   try {
-    requireKey(req);
+    const supabase = getSupabase();
+    await requireAuth(req, supabase);
 
     const { searchParams } = new URL(req.url);
     const email = searchParams.get("email");
-    const supabase = getSupabase();
 
     if (!email) {
       const { data: profiles } = await supabase
@@ -71,7 +92,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     const msg = (err as Error).message;
-    if (msg === "Unauthorized") {
+    if (msg.startsWith("Unauthorized")) {
       return NextResponse.json({ error: msg }, { status: 401 });
     }
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -81,10 +102,10 @@ export async function GET(req: NextRequest) {
 /** POST version (same logic, reads from body) */
 export async function POST(req: NextRequest) {
   try {
-    requireKey(req);
+    const supabase = getSupabase();
+    await requireAuth(req, supabase);
 
     const { email } = (await req.json()) as { email?: string };
-    const supabase = getSupabase();
 
     if (!email) {
       const { data: profiles } = await supabase
@@ -108,7 +129,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, message: `${email} is now admin`, profile: updated[0] });
   } catch (err) {
     const msg = (err as Error).message;
-    if (msg === "Unauthorized") return NextResponse.json({ error: msg }, { status: 401 });
+    if (msg.startsWith("Unauthorized")) return NextResponse.json({ error: msg }, { status: 401 });
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
