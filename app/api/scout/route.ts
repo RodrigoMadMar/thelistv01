@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
+import { CITIES } from "@/lib/scout/config";
 
 /* ── Auth check ── */
 async function requireAdmin(req: NextRequest) {
@@ -22,6 +23,201 @@ async function requireAdmin(req: NextRequest) {
   if (profile?.role !== "admin") throw new Error("No autorizado");
 }
 
+/* ── Google Maps Places search ── */
+const GMAPS_FIELD_MASK = [
+  "places.id",
+  "places.displayName",
+  "places.formattedAddress",
+  "places.rating",
+  "places.userRatingCount",
+  "places.websiteUri",
+  "places.nationalPhoneNumber",
+  "places.googleMapsUri",
+].join(",");
+
+async function searchGoogleMaps(
+  query: string,
+  location?: string,
+): Promise<string> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey) return "Error: GOOGLE_MAPS_API_KEY no configurada";
+
+  const textQuery = location ? `${query} en ${location}, Chile` : `${query} Chile`;
+
+  // Try to find city coords for location bias
+  let locationBias: Record<string, unknown> | undefined;
+  if (location) {
+    const cityKey = Object.keys(CITIES).find(
+      (c) => location.toLowerCase().includes(c.toLowerCase()),
+    );
+    if (cityKey) {
+      const coords = CITIES[cityKey];
+      locationBias = {
+        circle: {
+          center: { latitude: coords.lat, longitude: coords.lng },
+          radius: 15000,
+        },
+      };
+    }
+  }
+
+  try {
+    const res = await fetch(
+      "https://places.googleapis.com/v1/places:searchText",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask": GMAPS_FIELD_MASK,
+        },
+        body: JSON.stringify({
+          textQuery,
+          languageCode: "es",
+          regionCode: "CL",
+          maxResultCount: 10,
+          ...(locationBias ? { locationBias } : {}),
+        }),
+      },
+    );
+
+    if (!res.ok) {
+      const errText = await res.text();
+      return `Error de Google Maps API (${res.status}): ${errText}`;
+    }
+
+    const data = await res.json();
+    const places = data.places || [];
+
+    if (places.length === 0) return "Sin resultados en Google Maps para esta búsqueda.";
+
+    return places
+      .map(
+        (p: Record<string, unknown>) => {
+          const display = p.displayName as Record<string, string> | undefined;
+          return [
+            `- **${display?.text || "Sin nombre"}**`,
+            p.formattedAddress ? `  Dirección: ${p.formattedAddress}` : null,
+            p.rating ? `  Rating: ${p.rating}/5 (${p.userRatingCount || 0} reseñas)` : null,
+            p.websiteUri ? `  Web: ${p.websiteUri}` : null,
+            p.nationalPhoneNumber ? `  Tel: ${p.nationalPhoneNumber}` : null,
+            p.googleMapsUri ? `  Maps: ${p.googleMapsUri}` : null,
+          ]
+            .filter(Boolean)
+            .join("\n");
+        },
+      )
+      .join("\n\n");
+  } catch (err) {
+    return `Error buscando en Google Maps: ${(err as Error).message}`;
+  }
+}
+
+/* ── Comino.cl search ── */
+const COMINO_USER_AGENT = "Mozilla/5.0 (compatible; thelistbot/1.0)";
+
+async function searchComino(query: string): Promise<string> {
+  try {
+    // Fetch the main guide page
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    const res = await fetch("https://comino.cl/guia/", {
+      headers: { "User-Agent": COMINO_USER_AGENT },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) return "Error: no se pudo acceder a comino.cl";
+
+    const html = await res.text();
+
+    // Extract listing slugs
+    const slugRegex = /href="https:\/\/comino\.cl\/guia\/([a-z0-9-]+)\/?"/gi;
+    const slugs = new Set<string>();
+    let match;
+    while ((match = slugRegex.exec(html)) !== null) {
+      if (match[1]) slugs.add(match[1]);
+    }
+
+    // Filter slugs by query keywords
+    const keywords = query
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .split(/\s+/)
+      .filter((k) => k.length > 2);
+
+    const matchingSlugs = Array.from(slugs).filter((slug) => {
+      const normalized = slug.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return keywords.some((kw) => normalized.includes(kw));
+    });
+
+    // Also fetch detail pages for top matches (max 5)
+    const results: string[] = [];
+    const slugsToFetch = matchingSlugs.length > 0 ? matchingSlugs.slice(0, 5) : [];
+
+    for (const slug of slugsToFetch) {
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 8000);
+        const pageRes = await fetch(`https://comino.cl/guia/${slug}/`, {
+          headers: { "User-Agent": COMINO_USER_AGENT },
+          signal: ctrl.signal,
+        });
+        clearTimeout(t);
+
+        if (!pageRes.ok) continue;
+        const pageHtml = await pageRes.text();
+
+        // Extract basic info
+        const nameMatch = pageHtml.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+        const name = nameMatch ? nameMatch[1].replace(/<[^>]+>/g, "").trim() : slug;
+
+        const igMatch = pageHtml.match(/instagram\.com\/([a-zA-Z0-9._]+)/i);
+        const ig = igMatch ? `@${igMatch[1].replace(/\/$/, "")}` : null;
+
+        const telMatch = pageHtml.match(/tel:([+\d\s-]+)/i);
+        const phone = telMatch ? telMatch[1].trim() : null;
+
+        // Description: longest paragraph
+        const paragraphs = pageHtml.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || [];
+        let desc = "";
+        for (const p of paragraphs) {
+          const text = p.replace(/<[^>]+>/g, "").trim();
+          if (text.length > desc.length && text.length > 50) desc = text;
+        }
+
+        results.push(
+          [
+            `- **${name}**`,
+            `  URL: https://comino.cl/guia/${slug}/`,
+            ig ? `  Instagram: ${ig}` : null,
+            phone ? `  Tel: ${phone}` : null,
+            desc ? `  Descripción: ${desc.slice(0, 200)}...` : null,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        );
+
+        await new Promise((r) => setTimeout(r, 300));
+      } catch {
+        continue;
+      }
+    }
+
+    if (results.length === 0) {
+      // If no slug match, return all available slugs for the agent to review
+      const allSlugs = Array.from(slugs).slice(0, 30);
+      return `No se encontraron coincidencias directas para "${query}" en comino.cl. Listings disponibles: ${allSlugs.join(", ")}`;
+    }
+
+    return `Resultados de comino.cl para "${query}":\n\n${results.join("\n\n")}`;
+  } catch (err) {
+    return `Error buscando en comino.cl: ${(err as Error).message}`;
+  }
+}
+
 /* ── Tool definitions ── */
 const tools: Anthropic.Tool[] = [
   {
@@ -29,6 +225,43 @@ const tools: Anthropic.Tool[] = [
     name: "web_search",
     max_uses: 10,
   } as unknown as Anthropic.Tool,
+  {
+    name: "search_google_maps",
+    description:
+      "Search for businesses on Google Maps using the Places API. Returns name, address, rating, website, phone and Maps link for each result. Use this to find real businesses by type and location.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "Search query, e.g. 'pizzeria artesanal', 'bar de cócteles', 'taller de cerámica'",
+        },
+        location: {
+          type: "string",
+          description:
+            "City or area to search in, e.g. 'Santiago', 'Providencia', 'Valparaíso'. Optional.",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "search_comino",
+    description:
+      "Search for businesses listed on comino.cl, a Chilean restaurant and bar guide. Returns name, URL, Instagram, phone and description for matching listings.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "Search query to match against comino.cl listings, e.g. 'pizza', 'bar', 'cafe'",
+        },
+      },
+      required: ["query"],
+    },
+  },
   {
     name: "save_candidate",
     description:
@@ -137,20 +370,26 @@ Tu misión: encontrar hosts potenciales que ofrezcan experiencias íntimas, úni
 - **5-6**: Genérico o masivo, no guardar
 - **<5**: No es un fit, ignorar
 
+## Herramientas disponibles:
+Tienes 3 fuentes de búsqueda. **DEBES usar las 3** para maximizar resultados:
+1. **search_google_maps**: Busca negocios en Google Maps con ratings, teléfonos y direcciones reales
+2. **search_comino**: Busca en comino.cl, guía chilena de restaurantes y bares
+3. **web_search**: Búsqueda general en Google para encontrar Instagram, emails, sitios web y más info
+
 ## Instrucciones:
-1. Busca con múltiples queries relacionadas a: "${queryWithLocation}"
-2. Varía las búsquedas (Instagram, Google, directorios locales)
-3. Para cada hallazgo interesante, evalúa su fit con thelist
-4. Guarda solo candidatos con score >= 6
-5. Intenta encontrar al menos 3-5 candidatos de calidad
-6. Incluye el email de contacto si lo encuentras
+1. Primero busca en Google Maps: "${queryWithLocation}"
+2. Luego busca en comino.cl con términos relevantes
+3. Usa web_search para completar info (Instagram, email, reseñas) de los candidatos encontrados
+4. Para cada hallazgo interesante, evalúa su fit con thelist
+5. Guarda solo candidatos con score >= 6 usando save_candidate
+6. Intenta encontrar al menos 3-5 candidatos de calidad
 
 Comienza la búsqueda ahora.`,
       },
     ];
 
     let turns = 0;
-    const maxTurns = 10;
+    const maxTurns = 12;
     let savedCount = 0;
     const savedNames: string[] = [];
 
@@ -177,8 +416,17 @@ Comienza la búsqueda ahora.`,
           // Skip server-side tools (web_search is handled by Anthropic)
           if (block.name === "web_search") continue;
 
-          if (block.name === "save_candidate") {
-            const input = block.input as Record<string, unknown>;
+          const input = block.input as Record<string, unknown>;
+          let result: string;
+
+          if (block.name === "search_google_maps") {
+            result = await searchGoogleMaps(
+              input.query as string,
+              input.location as string | undefined,
+            );
+          } else if (block.name === "search_comino") {
+            result = await searchComino(input.query as string);
+          } else if (block.name === "save_candidate") {
             const { error } = await supabase.from("candidates").insert({
               name: input.name,
               category: input.category || null,
@@ -193,7 +441,6 @@ Comienza la búsqueda ahora.`,
               status: "new",
             });
 
-            let result: string;
             if (error) {
               result = `Error saving: ${error.message}`;
             } else {
@@ -201,13 +448,15 @@ Comienza la búsqueda ahora.`,
               savedNames.push(input.name as string);
               result = `Saved "${input.name}" (score: ${input.score}/10)`;
             }
-
-            toolResults.push({
-              type: "tool_result",
-              tool_use_id: block.id,
-              content: result,
-            });
+          } else {
+            continue;
           }
+
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: result,
+          });
         }
 
         if (toolResults.length > 0) {
