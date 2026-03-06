@@ -1,8 +1,58 @@
 import type { Lead } from "./types";
 
+const CATEGORY_MAP: Record<string, string> = {
+  restaurante: "RESTAURANTE",
+  restaurant: "RESTAURANTE",
+  restaurantes: "RESTAURANTE",
+  bar: "BAR",
+  bares: "BAR",
+  "cafetería": "CAFETERÍA",
+  cafeteria: "CAFETERÍA",
+  cafeterias: "CAFETERÍA",
+  cafe: "CAFETERÍA",
+  "café": "CAFETERÍA",
+  outdoor: "OUTDOOR",
+  aventura: "AVENTURA",
+  wellness: "WELLNESS",
+  spa: "WELLNESS",
+  taller: "TALLER",
+  talleres: "TALLER",
+  clase: "CLASE",
+  hotel: "HOTEL",
+};
+
+const NAME_PREFIXES = [
+  "Restaurante",
+  "Restaurant",
+  "Café",
+  "Cafe",
+  "Bar",
+  "Hotel",
+  "Spa",
+  "Hostal",
+];
+
+function deriveShortName(name: string): string {
+  for (const prefix of NAME_PREFIXES) {
+    if (name.toLowerCase().startsWith(prefix.toLowerCase())) {
+      const rest = name.slice(prefix.length).trim();
+      if (rest.length > 0) return rest;
+    }
+  }
+  return name;
+}
+
+function deriveCategory(categories: string[]): string {
+  for (const cat of categories) {
+    const mapped = CATEGORY_MAP[cat.toLowerCase()];
+    if (mapped) return mapped;
+  }
+  return "EXPERIENCIA";
+}
+
 export async function generateOutreachEmail(
   lead: Lead,
-): Promise<{ subject: string; body: string }> {
+): Promise<{ subject: string; body: string; category_label: string }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
 
@@ -13,10 +63,10 @@ export async function generateOutreachEmail(
     lead.category?.length ? `Categoría: ${lead.category.join(", ")}` : null,
     lead.rating ? `Rating: ${lead.rating}/5 (${lead.review_count || 0} reviews)` : null,
     lead.address ? `Dirección: ${lead.address}` : null,
-    lead.website ? `Website: ${lead.website}` : null,
     lead.google_types?.length ? `Tipos Google: ${lead.google_types.join(", ")}` : null,
-    lead.price_level !== null ? `Nivel de precio: ${lead.price_level}/4` : null,
+    lead.price_level !== null && lead.price_level !== undefined ? `Nivel de precio: ${lead.price_level}/4` : null,
     lead.description ? `Descripción: ${lead.description}` : null,
+    lead.raw_data?.price_text ? `Precio: ${lead.raw_data.price_text}` : null,
   ]
     .filter(Boolean)
     .join("\n");
@@ -30,30 +80,33 @@ export async function generateOutreachEmail(
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
-      max_tokens: 1024,
+      max_tokens: 256,
       messages: [
         {
           role: "user",
-          content: `Genera un email de outreach para invitar a "${lead.name}" a ser parte de thelist.cl.
+          content: `Eres el scout de thelist.cl, una plataforma de experiencias curadas en Chile.
 
-Datos del lugar:
+Dado el siguiente lugar:
 ${context}
 
-Sobre thelist.cl:
-- Plataforma curada de experiencias en Chile
-- Cada experiencia se lanza como un "drop" exclusivo
-- Grupos pequeños, máx 20 personas
-- Los hosts reciben el 90% del precio (10% fee thelist)
-- Categorías: restaurante, bar, cafetería, outdoor, wellness, taller
+Genera UNA frase que describa qué hace el lugar y qué lo hace especial.
 
-Reglas para el email:
-- Tono editorial, exclusivo, directo. NO spam. Tutear.
-- Máximo 120 palabras en el body
-- Mencionar algo específico del lugar (que no parezca genérico)
-- El email es de "Rodrigo de thelist.cl", desde hola@thelist.cl
-- Cerrar con una pregunta que invite a una conversación de 15 min
-- Responder SOLO en JSON válido: {"subject": "...", "body": "..."}
-- El body debe ser texto plano (sin HTML), con saltos de línea donde corresponda`,
+REGLAS ESTRICTAS:
+- Todo en minúscula
+- Sin punto final
+- Máximo 20 palabras
+- Patrón: "{qué hacen} + {qué los diferencia}"
+- Debe sonar como si hubieras ido al lugar o lo conocieras bien
+- NO uses palabras como "único", "increíble", "maravilloso" ni adjetivos genéricos
+
+EJEMPLOS:
+- "pizza artesanal en espacios patrimoniales de Valpo, con música en vivo y cupos contados"
+- "coctelería de autor en un speakeasy escondido en Lastarria, con carta rotativa semanal"
+- "café de especialidad con tostaduría propia y los mejores filtrados de Barrio Italia"
+- "cocina nikkei con pescadería propia y una relación precio-calidad difícil de encontrar"
+- "trekking guiado por Cajón del Maipo con campamento y cena bajo las estrellas"
+
+Responde SOLO con la frase, sin comillas, sin explicación, sin nada más.`,
         },
       ],
     }),
@@ -65,12 +118,25 @@ Reglas para el email:
   }
 
   const data = await response.json();
-  const text = data.content[0].text;
+  const frasePersonalizada = data.content[0].text.trim().replace(/^["']|["']$/g, "").replace(/\.$/, "");
 
-  // Extract JSON from response (handle potential markdown wrapping)
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("Could not parse email JSON from Claude response");
+  const nombreCorto = deriveShortName(lead.name);
+  const categoryLabel = deriveCategory(lead.category || []);
 
-  const parsed = JSON.parse(jsonMatch[0]);
-  return { subject: parsed.subject, body: parsed.body };
+  const subject = `${lead.name}, los queremos en thelist`;
+
+  const body = `Hola equipo ${nombreCorto},
+
+Hemos visto lo que hacen — ${frasePersonalizada} — y nos encantaría que formen parte de THELIST.
+
+Somos una plataforma de experiencias curadas en Chile. Cada evento se lanza como un drop exclusivo para grupos reducidos. Lo que necesitamos de ustedes: una experiencia exclusiva diseñada especialmente para estar en thelist. Algo que no se encuentre en otro lado.
+
+El modelo es simple: ustedes se quedan con el 90% del precio, nosotros el 10%.
+
+¿Conversamos? Respondan este mail o agendamos una llamada de 20 minutos cuando les acomode.
+
+Rodrigo
+contacto@thelist.cl`;
+
+  return { subject, body, category_label: categoryLabel };
 }

@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     const { data: lead, error } = await supabase
       .from("leads")
-      .select("id, website, email")
+      .select("id, website, email, instagram")
       .eq("id", lead_id)
       .single();
 
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await enrichContactDeep(lead.website);
+    const result = await enrichContactDeep(lead.website, lead.instagram);
 
     // Update in DB
     const updates: Record<string, unknown> = {
