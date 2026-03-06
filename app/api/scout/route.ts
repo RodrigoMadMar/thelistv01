@@ -218,12 +218,94 @@ async function searchComino(query: string): Promise<string> {
   }
 }
 
+/* ── Scrape website/Instagram for emails ── */
+const SCRAPE_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+async function scrapeForEmails(url: string): Promise<string> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    const res = await fetch(url, {
+      headers: { "User-Agent": SCRAPE_USER_AGENT },
+      signal: controller.signal,
+      redirect: "follow",
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) return `Error: no se pudo acceder a ${url} (${res.status})`;
+
+    const html = await res.text();
+
+    // Extract emails with regex
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const rawEmails = html.match(emailRegex) || [];
+
+    // Filter out common false positives
+    const excluded = new Set([
+      "example@email.com",
+      "name@example.com",
+      "email@example.com",
+      "user@example.com",
+      "test@test.com",
+      "wixpress.com",
+      "sentry.io",
+    ]);
+
+    const emails = Array.from(new Set(rawEmails)).filter((e) => {
+      const lower = e.toLowerCase();
+      if (excluded.has(lower)) return false;
+      // Skip image/asset filenames that look like emails
+      if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".svg")) return false;
+      // Skip common code/framework emails
+      if (lower.includes("webpack") || lower.includes("babel") || lower.includes("eslint")) return false;
+      return true;
+    });
+
+    // Also look for mailto: links
+    const mailtoRegex = /mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi;
+    let match;
+    while ((match = mailtoRegex.exec(html)) !== null) {
+      const email = match[1].toLowerCase();
+      if (!emails.includes(email) && !excluded.has(email)) {
+        emails.push(email);
+      }
+    }
+
+    // Also extract Instagram handles if found
+    const igRegex = /instagram\.com\/([a-zA-Z0-9._]{2,30})/gi;
+    const igHandles = new Set<string>();
+    while ((match = igRegex.exec(html)) !== null) {
+      const handle = match[1].replace(/\/$/, "").toLowerCase();
+      const igExcluded = new Set(["p", "reel", "stories", "explore", "accounts", "about", "legal", "developer"]);
+      if (!igExcluded.has(handle)) igHandles.add(handle);
+    }
+
+    const parts: string[] = [];
+    if (emails.length > 0) {
+      parts.push(`Emails encontrados: ${emails.join(", ")}`);
+    }
+    if (igHandles.size > 0) {
+      parts.push(`Instagram: ${Array.from(igHandles).map((h) => `@${h}`).join(", ")}`);
+    }
+
+    if (parts.length === 0) {
+      return `No se encontraron emails ni Instagram en ${url}`;
+    }
+
+    return parts.join("\n");
+  } catch (err) {
+    return `Error accediendo a ${url}: ${(err as Error).message}`;
+  }
+}
+
 /* ── Tool definitions ── */
 const tools: Anthropic.Tool[] = [
   {
     type: "web_search_20250305",
     name: "web_search",
-    max_uses: 10,
+    max_uses: 15,
   } as unknown as Anthropic.Tool,
   {
     name: "search_google_maps",
@@ -260,6 +342,22 @@ const tools: Anthropic.Tool[] = [
         },
       },
       required: ["query"],
+    },
+  },
+  {
+    name: "scrape_emails",
+    description:
+      "Scrape a website URL to extract email addresses and Instagram handles. Use this on candidate websites and Instagram profile pages to find contact emails.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        url: {
+          type: "string",
+          description:
+            "URL to scrape. Can be a business website, Instagram profile page (https://www.instagram.com/handle/), or any page that might contain an email.",
+        },
+      },
+      required: ["url"],
     },
   },
   {
@@ -377,26 +475,32 @@ Tu misión: encontrar hosts potenciales que ofrezcan experiencias íntimas, úni
 - **<5**: No es un fit, ignorar
 
 ## Herramientas disponibles:
-Tienes 3 fuentes de búsqueda. **DEBES usar las 3** para maximizar resultados:
 1. **search_google_maps**: Busca negocios en Google Maps con ratings, teléfonos y direcciones reales
 2. **search_comino**: Busca en comino.cl, guía chilena de restaurantes y bares
 3. **web_search**: Búsqueda general en Google para encontrar Instagram, emails, sitios web y más info
+4. **scrape_emails**: Visita una URL (sitio web o perfil de Instagram) y extrae emails de contacto
+5. **save_candidate**: Guarda un candidato calificado
 
 ## Instrucciones:
 1. Primero busca en Google Maps: "${queryWithLocation}"
 2. Luego busca en comino.cl con términos relevantes
 3. Usa web_search para completar info (Instagram, email, reseñas) de los candidatos encontrados
-4. Para cada hallazgo interesante, evalúa su fit con thelist
-5. Guarda solo candidatos con score >= 6 usando save_candidate
-6. SIEMPRE incluye el campo "sources" indicando de dónde encontraste al candidato (google_maps, comino, web_search)
-7. Intenta encontrar al menos 3-5 candidatos de calidad
+4. **IMPORTANTE — Buscar emails**: Para cada candidato con website o Instagram:
+   - Usa scrape_emails en su sitio web para buscar emails de contacto
+   - Si tiene Instagram, busca con web_search: "NOMBRE_NEGOCIO email contacto" o "NOMBRE_NEGOCIO site:instagram.com"
+   - También intenta scrape_emails en su página de Instagram (https://www.instagram.com/HANDLE/)
+   - Si no encuentras email directo, busca con web_search: "NOMBRE_NEGOCIO contacto email chile"
+5. Para cada hallazgo interesante, evalúa su fit con thelist
+6. Guarda solo candidatos con score >= 6 usando save_candidate
+7. SIEMPRE incluye el campo "sources" indicando de dónde encontraste al candidato
+8. Intenta encontrar al menos 3-5 candidatos de calidad CON EMAIL
 
 Comienza la búsqueda ahora.`,
       },
     ];
 
     let turns = 0;
-    const maxTurns = 12;
+    const maxTurns = 16;
     let savedCount = 0;
     const savedNames: string[] = [];
 
@@ -433,6 +537,8 @@ Comienza la búsqueda ahora.`,
             );
           } else if (block.name === "search_comino") {
             result = await searchComino(input.query as string);
+          } else if (block.name === "scrape_emails") {
+            result = await scrapeForEmails(input.url as string);
           } else if (block.name === "save_candidate") {
             const { error } = await supabase.from("candidates").insert({
               name: input.name,
