@@ -25,6 +25,11 @@ async function requireAdmin(req: NextRequest) {
 /* ── Tool definitions ── */
 const tools: Anthropic.Tool[] = [
   {
+    type: "web_search_20250305",
+    name: "web_search",
+    max_uses: 10,
+  } as unknown as Anthropic.Tool,
+  {
     name: "save_candidate",
     description:
       "Save a potential host candidate to the database. Only save candidates with a score >= 6.",
@@ -145,7 +150,7 @@ Comienza la búsqueda ahora.`,
     ];
 
     let turns = 0;
-    const maxTurns = 5;
+    const maxTurns = 10;
     let savedCount = 0;
     const savedNames: string[] = [];
 
@@ -169,7 +174,8 @@ Comienza la búsqueda ahora.`,
         for (const block of response.content) {
           if (block.type !== "tool_use") continue;
 
-          let result: string;
+          // Skip server-side tools (web_search is handled by Anthropic)
+          if (block.name === "web_search") continue;
 
           if (block.name === "save_candidate") {
             const input = block.input as Record<string, unknown>;
@@ -187,6 +193,7 @@ Comienza la búsqueda ahora.`,
               status: "new",
             });
 
+            let result: string;
             if (error) {
               result = `Error saving: ${error.message}`;
             } else {
@@ -194,18 +201,18 @@ Comienza la búsqueda ahora.`,
               savedNames.push(input.name as string);
               result = `Saved "${input.name}" (score: ${input.score}/10)`;
             }
-          } else {
-            result = "Unknown tool";
-          }
 
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: result,
-          });
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: result,
+            });
+          }
         }
 
-        messages.push({ role: "user", content: toolResults });
+        if (toolResults.length > 0) {
+          messages.push({ role: "user", content: toolResults });
+        }
       }
     }
 
