@@ -589,34 +589,47 @@ export default function ScoutDashboard() {
                     {expandedEmail === lead.id && lead.generated_email_subject && (
                       <tr key={`${lead.id}-email`} className="border-b border-[#1a1a1a]">
                         <td colSpan={10} className="px-4 py-4">
-                          <div className="bg-[#0a0a0a] border border-[#222] rounded-lg p-4 space-y-3 max-w-2xl ml-8">
+                          <div className="bg-[#0a0a0a] border border-[#222] rounded-lg p-5 space-y-4 max-w-2xl ml-8">
+                            {/* Category · City header */}
+                            <p className="text-xs text-[#4ade80] uppercase tracking-widest">
+                              {(lead.category || []).map((c) => c.toUpperCase()).join(" · ")}{lead.city ? ` · ${lead.city}` : ""}
+                            </p>
+
+                            {/* Title */}
+                            <p className="text-[#e8e4df] font-semibold text-base" style={{ fontFamily: "Playfair Display, serif" }}>
+                              Queremos que {lead.name} sea host en thelist.cl
+                            </p>
+
+                            <div className="border-t border-[#222]" />
+
+                            {/* Subject */}
                             <div>
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs text-[#8a8580] uppercase tracking-wider">Subject</p>
-                                <button
-                                  onClick={() => copyToClipboard(lead.generated_email_subject!)}
-                                  className="text-xs text-[#8a8580] hover:text-[#e8e4df] transition-colors"
-                                >
-                                  Copiar
-                                </button>
-                              </div>
-                              <p className="text-[#e8e4df] mt-1">{lead.generated_email_subject}</p>
+                              <p className="text-[10px] text-[#8a8580] uppercase tracking-wider mb-1">Subject</p>
+                              <p className="text-[#e8e4df] text-sm">{lead.generated_email_subject}</p>
                             </div>
+
+                            {/* Body */}
                             <div>
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs text-[#8a8580] uppercase tracking-wider">Body</p>
-                                <button
-                                  onClick={() => copyToClipboard(lead.generated_email_body!)}
-                                  className="text-xs text-[#8a8580] hover:text-[#e8e4df] transition-colors"
-                                >
-                                  Copiar
-                                </button>
-                              </div>
-                              <p className="text-[#e8e4df] mt-1 whitespace-pre-wrap text-sm leading-relaxed">
+                              <p className="text-[10px] text-[#8a8580] uppercase tracking-wider mb-1">Body</p>
+                              <p className="text-[#e8e4df] whitespace-pre-wrap text-sm leading-relaxed">
                                 {lead.generated_email_body}
                               </p>
                             </div>
-                            <div className="flex gap-2 pt-2">
+
+                            {/* Action buttons */}
+                            <div className="flex flex-wrap gap-2 pt-2">
+                              <button
+                                onClick={() => copyToClipboard(lead.generated_email_subject!)}
+                                className="px-3 py-1.5 text-xs bg-[#222] border border-[#333] text-[#8a8580] rounded hover:text-[#e8e4df] transition-colors"
+                              >
+                                Copiar Subject
+                              </button>
+                              <button
+                                onClick={() => copyToClipboard(lead.generated_email_body!)}
+                                className="px-3 py-1.5 text-xs bg-[#222] border border-[#333] text-[#8a8580] rounded hover:text-[#e8e4df] transition-colors"
+                              >
+                                Copiar Body
+                              </button>
                               <button
                                 onClick={() =>
                                   copyToClipboard(
@@ -625,7 +638,7 @@ export default function ScoutDashboard() {
                                 }
                                 className="px-3 py-1.5 text-xs bg-[#d4a857]/20 border border-[#d4a857]/30 text-[#d4a857] rounded hover:bg-[#d4a857]/30 transition-colors"
                               >
-                                Copiar Email Completo
+                                Copiar Todo
                               </button>
                               <button
                                 onClick={() => handleGenerateEmail(lead.id)}
