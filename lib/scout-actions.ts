@@ -105,8 +105,8 @@ export async function sendOutreachEmail(
     if (candidate.status === "contacted")
       return { error: "Ya fue contactado" };
 
-    // Generate personalised email
-    const emailHtml = await generateOutreachEmail(candidate as Candidate);
+    // Use existing draft if available, otherwise generate
+    const emailHtml = candidate.outreach_email || await generateOutreachEmail(candidate as Candidate);
 
     // Send via Resend
     const resendKey = process.env.RESEND_API_KEY;

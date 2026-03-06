@@ -218,6 +218,7 @@ export interface Candidate {
   score: number;
   reason: string | null;
   source_query: string | null;
+  sources: string[];
   status: CandidateStatus;
   contacted_at: string | null;
   outreach_email: string | null;
