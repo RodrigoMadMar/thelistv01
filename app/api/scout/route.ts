@@ -22,23 +22,8 @@ async function requireAdmin(req: NextRequest) {
   if (profile?.role !== "admin") throw new Error("No autorizado");
 }
 
-/* ── Tool definitions (same as script) ── */
+/* ── Tool definitions ── */
 const tools: Anthropic.Tool[] = [
-  {
-    name: "web_search",
-    description:
-      "Search the web for potential experience hosts. Use specific queries about intimate experiences, private tastings, small group activities, underground events, etc. in Chile.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        query: {
-          type: "string",
-          description: "Search query in Spanish for finding experiences",
-        },
-      },
-      required: ["query"],
-    },
-  },
   {
     name: "save_candidate",
     description:
@@ -84,38 +69,6 @@ const tools: Anthropic.Tool[] = [
     },
   },
 ];
-
-/* ── Web search via Tavily ── */
-async function executeWebSearch(query: string): Promise<string> {
-  const tavilyKey = process.env.TAVILY_API_KEY;
-  if (!tavilyKey) {
-    return `⚠️ TAVILY_API_KEY not configured. Add it to your environment variables to enable web search.`;
-  }
-
-  try {
-    const res = await fetch("https://api.tavily.com/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        api_key: tavilyKey,
-        query,
-        search_depth: "advanced",
-        max_results: 8,
-        include_answer: true,
-      }),
-    });
-    const data = await res.json();
-    const results = data.results
-      ?.map(
-        (r: { title: string; url: string; content: string }) =>
-          `[${r.title}](${r.url})\n${r.content}`,
-      )
-      .join("\n\n");
-    return `Search results for "${query}":\n\n${data.answer || ""}\n\n${results || "No results found."}`;
-  } catch (err) {
-    return `Search failed: ${(err as Error).message}. Try a different query.`;
-  }
-}
 
 /* ── POST /api/scout ── */
 export async function POST(req: NextRequest) {
@@ -218,11 +171,7 @@ Comienza la búsqueda ahora.`,
 
           let result: string;
 
-          if (block.name === "web_search") {
-            result = await executeWebSearch(
-              (block.input as { query: string }).query,
-            );
-          } else if (block.name === "save_candidate") {
+          if (block.name === "save_candidate") {
             const input = block.input as Record<string, unknown>;
             const { error } = await supabase.from("candidates").insert({
               name: input.name,
