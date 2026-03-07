@@ -507,12 +507,29 @@ Comienza la búsqueda ahora.`,
     while (turns < maxTurns) {
       turns++;
 
-      const response = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 4096,
-        tools,
-        messages,
-      });
+      let response: Anthropic.Message;
+      let retries = 0;
+      const maxRetries = 3;
+      while (true) {
+        try {
+          response = await anthropic.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 4096,
+            tools,
+            messages,
+          });
+          break;
+        } catch (apiErr: unknown) {
+          const status = (apiErr as { status?: number }).status;
+          if (status === 429 && retries < maxRetries) {
+            retries++;
+            const delay = Math.pow(2, retries) * 1000; // 2s, 4s, 8s
+            await new Promise((r) => setTimeout(r, delay));
+            continue;
+          }
+          throw apiErr;
+        }
+      }
 
       messages.push({ role: "assistant", content: response.content });
 
