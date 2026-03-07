@@ -93,6 +93,7 @@ function extractEmailsFromFooter(html: string, websiteDomain: string | null): st
     /<footer[^>]*>([\s\S]*?)<\/footer>/gi,
     /<div[^>]*class="[^"]*footer[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
     /<section[^>]*id="[^"]*contact[^"]*"[^>]*>([\s\S]*?)<\/section>/gi,
+    /<div[^>]*id="[^"]*footer[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
   ];
 
   for (const pattern of footerPatterns) {
@@ -103,11 +104,26 @@ function extractEmailsFromFooter(html: string, websiteDomain: string | null): st
     }
   }
 
-  // Also check meta tags
-  const metaMatch = html.match(/<meta[^>]*(?:name|property)="[^"]*(?:contact|email)[^"]*"[^>]*content="([^"]+)"/i);
-  if (metaMatch) {
-    const emails = extractEmails(metaMatch[1], websiteDomain);
-    if (emails.length > 0) return emails;
+  // Check meta tags for contact/email info
+  const metaPatterns = [
+    /<meta[^>]*(?:name|property)="[^"]*(?:contact|email)[^"]*"[^>]*content="([^"]+)"/gi,
+    /<meta[^>]*content="([^"]+)"[^>]*(?:name|property)="[^"]*(?:contact|email)[^"]*"/gi,
+  ];
+
+  for (const pattern of metaPatterns) {
+    let match;
+    while ((match = pattern.exec(html)) !== null) {
+      const emails = extractEmails(match[1], websiteDomain);
+      if (emails.length > 0) return emails;
+    }
+  }
+
+  // Check <a> tags inside footer-like sections for mailto
+  const footerLinkPattern = /<footer[^>]*>[\s\S]*?<a[^>]*href="mailto:([^"]+)"[^>]*>/gi;
+  let linkMatch;
+  while ((linkMatch = footerLinkPattern.exec(html)) !== null) {
+    const email = linkMatch[1].toLowerCase();
+    if (!isBlacklisted(email)) return [email];
   }
 
   return [];
@@ -159,12 +175,47 @@ async function enrichFromInstagram(handle: string): Promise<string | null> {
   return null;
 }
 
+/**
+ * Prioritized email ranking:
+ * 1. Email with own website domain (e.g. contacto@ouioui.cl)
+ * 2. Email from mailto: link
+ * 3. Email scraped from HTML
+ * 4. Email from Instagram bio
+ * 5. Generic email (gmail, hotmail) as last resort
+ */
+function pickBestEmail(
+  candidates: Array<{ email: string; source: string }>,
+  websiteDomain: string | null,
+): { email: string; source: string } | null {
+  if (candidates.length === 0) return null;
+
+  // 1. Own domain emails first
+  if (websiteDomain) {
+    const ownDomain = candidates.find((c) => c.email.includes(websiteDomain));
+    if (ownDomain) return ownDomain;
+  }
+
+  // 2. Non-generic emails
+  const nonGeneric = candidates.find(
+    (c) =>
+      !c.email.includes("gmail.") &&
+      !c.email.includes("hotmail.") &&
+      !c.email.includes("yahoo.") &&
+      !c.email.includes("outlook."),
+  );
+  if (nonGeneric) return nonGeneric;
+
+  // 3. Any email (generic as last resort)
+  return candidates[0];
+}
+
 export async function enrichContactDeep(
   website: string,
   instagramHandle?: string | null,
 ): Promise<EnrichResult> {
   const domain = getDomain(website);
   let foundInstagram: string | null = null;
+  const emailCandidates: Array<{ email: string; source: string }> = [];
 
   // 1. Try homepage
   const homeHtml = await fetchPage(website);
@@ -172,40 +223,39 @@ export async function enrichContactDeep(
     const emails = extractEmails(homeHtml, domain);
     foundInstagram = extractInstagram(homeHtml);
 
-    if (emails.length > 0) {
-      return {
-        email: emails[0],
-        instagram: foundInstagram,
-        email_source: "website_home",
-      };
+    for (const email of emails) {
+      emailCandidates.push({ email, source: "website_home" });
     }
 
-    // 2. Try footer/meta specifically
-    const footerEmails = extractEmailsFromFooter(homeHtml, domain);
-    if (footerEmails.length > 0) {
-      return {
-        email: footerEmails[0],
-        instagram: foundInstagram,
-        email_source: "website_footer",
-      };
+    // 2. Try footer/meta specifically (if no own-domain email found yet)
+    if (!emailCandidates.some((c) => domain && c.email.includes(domain))) {
+      const footerEmails = extractEmailsFromFooter(homeHtml, domain);
+      for (const email of footerEmails) {
+        if (!emailCandidates.some((c) => c.email === email)) {
+          emailCandidates.push({ email, source: "website_footer" });
+        }
+      }
     }
   }
 
-  // 3. Try contact/about subpages
-  for (const path of CONTACT_PATHS) {
-    const baseUrl = website.replace(/\/$/, "");
-    const html = await fetchPage(`${baseUrl}${path}`);
-    if (html) {
-      const emails = extractEmails(html, domain);
-      const ig = extractInstagram(html);
-      if (!foundInstagram && ig) foundInstagram = ig;
+  // 3. Try contact/about subpages (if no own-domain email found yet)
+  if (!emailCandidates.some((c) => domain && c.email.includes(domain))) {
+    for (const path of CONTACT_PATHS) {
+      const baseUrl = website.replace(/\/$/, "");
+      const html = await fetchPage(`${baseUrl}${path}`);
+      if (html) {
+        const emails = extractEmails(html, domain);
+        const ig = extractInstagram(html);
+        if (!foundInstagram && ig) foundInstagram = ig;
 
-      if (emails.length > 0) {
-        return {
-          email: emails[0],
-          instagram: foundInstagram || ig,
-          email_source: `website${path}`,
-        };
+        for (const email of emails) {
+          if (!emailCandidates.some((c) => c.email === email)) {
+            emailCandidates.push({ email, source: `website${path}` });
+          }
+        }
+
+        // If we found an own-domain email, stop searching subpages
+        if (domain && emails.some((e) => e.includes(domain))) break;
       }
     }
   }
@@ -214,13 +264,20 @@ export async function enrichContactDeep(
   const igHandle = instagramHandle || foundInstagram;
   if (igHandle) {
     const igEmail = await enrichFromInstagram(igHandle);
-    if (igEmail) {
-      return {
-        email: igEmail,
-        instagram: igHandle,
-        email_source: "instagram_bio",
-      };
+    if (igEmail && !emailCandidates.some((c) => c.email === igEmail)) {
+      emailCandidates.push({ email: igEmail, source: "instagram_bio" });
     }
+  }
+
+  // Pick the best email based on priority
+  const best = pickBestEmail(emailCandidates, domain);
+
+  if (best) {
+    return {
+      email: best.email,
+      instagram: foundInstagram || igHandle || null,
+      email_source: best.source,
+    };
   }
 
   return {
