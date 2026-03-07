@@ -56,21 +56,25 @@ export async function generateOutreachEmail(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
 
-  const context = [
-    `Nombre: ${lead.name}`,
-    `Ciudad: ${lead.city}`,
-    lead.commune ? `Comuna: ${lead.commune}` : null,
-    lead.category?.length ? `Categoría: ${lead.category.join(", ")}` : null,
-    lead.rating ? `Rating: ${lead.rating}/5 (${lead.review_count || 0} reviews)` : null,
-    lead.address ? `Dirección: ${lead.address}` : null,
-    lead.google_types?.length ? `Tipos Google: ${lead.google_types.join(", ")}` : null,
-    lead.price_level !== null && lead.price_level !== undefined ? `Nivel de precio: ${lead.price_level}/4` : null,
-    lead.description ? `Descripción: ${lead.description}` : null,
-    lead.raw_data?.price_text ? `Precio: ${lead.raw_data.price_text}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const nombreCorto = deriveShortName(lead.name);
+  const categoryLabel = deriveCategory(lead.category || []);
 
+  const subject = `${lead.name}, los queremos en thelist`;
+
+  const body = `Hola ${nombreCorto},
+
+Hemos visto lo que hacen y nos encantaría que formen parte de THELIST.
+
+Somos una plataforma de experiencias curadas en Chile. Cada experiencia se lanza como un drop exclusivo, diseñado por ustedes: el formato, la capacidad y el precio lo definen ustedes.
+
+El modelo es simple: ustedes se quedan con el 90% del precio, nosotros el 10%.
+
+Si les interesa, les mandamos un link para hacer el onboarding y empezar a publicar.
+
+Rodrigo
+contacto@thelist.cl`;
+
+  // Use Claude API to format the email cleanly
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -79,34 +83,20 @@ export async function generateOutreachEmail(
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 256,
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 512,
       messages: [
         {
           role: "user",
-          content: `Eres el scout de thelist.cl, una plataforma de experiencias curadas en Chile.
+          content: `Formatea el siguiente email de outreach de forma limpia y presentable. NO cambies el contenido ni agregues nada nuevo. Solo asegúrate de que el formato sea correcto: saltos de línea apropiados, sin caracteres extra, texto limpio.
 
-Dado el siguiente lugar:
-${context}
+Subject: ${subject}
 
-Genera UNA frase que describa qué hace el lugar y qué lo hace especial.
+Body:
+${body}
 
-REGLAS ESTRICTAS:
-- Todo en minúscula
-- Sin punto final
-- Máximo 20 palabras
-- Patrón: "{qué hacen} + {qué los diferencia}"
-- Debe sonar como si hubieras ido al lugar o lo conocieras bien
-- NO uses palabras como "único", "increíble", "maravilloso" ni adjetivos genéricos
-
-EJEMPLOS:
-- "pizza artesanal en espacios patrimoniales de Valpo, con música en vivo y cupos contados"
-- "coctelería de autor en un speakeasy escondido en Lastarria, con carta rotativa semanal"
-- "café de especialidad con tostaduría propia y los mejores filtrados de Barrio Italia"
-- "cocina nikkei con pescadería propia y una relación precio-calidad difícil de encontrar"
-- "trekking guiado por Cajón del Maipo con campamento y cena bajo las estrellas"
-
-Responde SOLO con la frase, sin comillas, sin explicación, sin nada más.`,
+Responde EXACTAMENTE con este formato JSON (sin markdown, sin backticks, solo el JSON):
+{"subject": "...", "body": "..."}`,
         },
       ],
     }),
@@ -118,25 +108,17 @@ Responde SOLO con la frase, sin comillas, sin explicación, sin nada más.`,
   }
 
   const data = await response.json();
-  const frasePersonalizada = data.content[0].text.trim().replace(/^["']|["']$/g, "").replace(/\.$/, "");
+  const rawText = data.content[0].text.trim();
 
-  const nombreCorto = deriveShortName(lead.name);
-  const categoryLabel = deriveCategory(lead.category || []);
-
-  const subject = `${lead.name}, los queremos en thelist`;
-
-  const body = `Hola equipo ${nombreCorto},
-
-Hemos visto lo que hacen — ${frasePersonalizada} — y nos encantaría que formen parte de THELIST.
-
-Somos una plataforma de experiencias curadas en Chile. Cada evento se lanza como un drop exclusivo para grupos reducidos. Lo que necesitamos de ustedes: una experiencia exclusiva diseñada especialmente para estar en thelist. Algo que no se encuentre en otro lado.
-
-El modelo es simple: ustedes se quedan con el 90% del precio, nosotros el 10%.
-
-¿Conversamos? Respondan este mail o agendamos una llamada de 20 minutos cuando les acomode.
-
-Rodrigo
-contacto@thelist.cl`;
-
-  return { subject, body, category_label: categoryLabel };
+  try {
+    const parsed = JSON.parse(rawText);
+    return {
+      subject: parsed.subject || subject,
+      body: parsed.body || body,
+      category_label: categoryLabel,
+    };
+  } catch {
+    // If Claude doesn't return valid JSON, use the template directly
+    return { subject, body, category_label: categoryLabel };
+  }
 }
