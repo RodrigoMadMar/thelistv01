@@ -457,64 +457,50 @@ export async function POST(req: NextRequest) {
     const messages: Anthropic.MessageParam[] = [
       {
         role: "user",
-        content: `Eres un agente de scouting para thelist.cl, una plataforma chilena de experiencias curadas para grupos pequeños (máx 20 personas).
+        content: `Scout para thelist.cl (experiencias curadas, grupos pequeños, Chile). Busca hosts potenciales.
 
-Tu misión: encontrar hosts potenciales que ofrezcan experiencias íntimas, únicas y de calidad.
+Salas: La Buena Mesa (gastronomía), Bar & Vino (coctelería), Arte & Experimental (talleres), Fiestas & Sesiones (música/DJ), Outdoor (aventura).
 
-## Salas (categorías):
-- **La Buena Mesa**: chefs, catas, cenas privadas, gastronomía de autor
-- **Bar & Vino**: listening bars, coctelería artesanal, sommelier, speakeasy
-- **Arte & Experimental**: ceramistas, artistas, performance, talleres de autor
-- **Fiestas & Sesiones**: DJs, stand-up, sesiones musicales, house parties curadas
-- **Outdoor**: trekking, kayak, escalada, escapadas, astro-turismo
+Score 0-10: >=8 íntimo/único/personalidad, 6-7 buen fit, <6 no guardar.
 
-## Criterios de evaluación (score 0-10):
-- **10**: Experiencia íntima, grupo pequeño, host con personalidad, no masivo, presencia online activa
-- **7-9**: Buen fit pero le falta algún elemento
-- **5-6**: Genérico o masivo, no guardar
-- **<5**: No es un fit, ignorar
+Pasos:
+1. search_google_maps: "${queryWithLocation}"
+2. search_comino con términos relevantes
+3. Para los mejores resultados, scrape_emails en su web e Instagram
+4. save_candidate solo score>=6, incluir sources y email si lo encontraste
+5. Busca 3-5 candidatos de calidad
 
-## Herramientas disponibles:
-1. **search_google_maps**: Busca negocios en Google Maps con ratings, teléfonos y direcciones reales
-2. **search_comino**: Busca en comino.cl, guía chilena de restaurantes y bares
-3. **web_search**: Búsqueda general en Google para encontrar Instagram, emails, sitios web y más info
-4. **scrape_emails**: Visita una URL (sitio web o perfil de Instagram) y extrae emails de contacto
-5. **save_candidate**: Guarda un candidato calificado
-
-## Instrucciones:
-1. Primero busca en Google Maps: "${queryWithLocation}"
-2. Luego busca en comino.cl con términos relevantes
-3. Usa web_search para completar info (Instagram, email, reseñas) de los candidatos encontrados
-4. **IMPORTANTE — Buscar emails**: Para cada candidato con website o Instagram:
-   - Usa scrape_emails en su sitio web para buscar emails de contacto
-   - Si tiene Instagram, busca con web_search: "NOMBRE_NEGOCIO email contacto" o "NOMBRE_NEGOCIO site:instagram.com"
-   - También intenta scrape_emails en su página de Instagram (https://www.instagram.com/HANDLE/)
-   - Si no encuentras email directo, busca con web_search: "NOMBRE_NEGOCIO contacto email chile"
-5. Para cada hallazgo interesante, evalúa su fit con thelist
-6. Guarda solo candidatos con score >= 6 usando save_candidate
-7. SIEMPRE incluye el campo "sources" indicando de dónde encontraste al candidato
-8. Intenta encontrar al menos 3-5 candidatos de calidad CON EMAIL
-
-Comienza la búsqueda ahora.`,
+Sé eficiente: no busques más de lo necesario. Comienza.`,
       },
     ];
 
     let turns = 0;
-    const maxTurns = 16;
+    const maxTurns = 8;
     let savedCount = 0;
     const savedNames: string[] = [];
+
+    // Truncate long tool results to keep context small
+    const truncate = (text: string, max = 1500): string => {
+      if (text.length <= max) return text;
+      return text.slice(0, max) + "\n...(truncado)";
+    };
 
     while (turns < maxTurns) {
       turns++;
 
+      // Rate limit: wait 2s between turns to stay under tokens/min
+      if (turns > 1) {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+
       let response: Anthropic.Message;
       let retries = 0;
-      const maxRetries = 3;
+      const maxRetries = 4;
       while (true) {
         try {
           response = await anthropic.messages.create({
             model: "claude-haiku-4-5-20251001",
-            max_tokens: 4096,
+            max_tokens: 2048,
             tools,
             messages,
           });
@@ -523,7 +509,7 @@ Comienza la búsqueda ahora.`,
           const status = (apiErr as { status?: number }).status;
           if (status === 429 && retries < maxRetries) {
             retries++;
-            const delay = Math.pow(2, retries) * 1000; // 2s, 4s, 8s
+            const delay = Math.pow(2, retries) * 2000; // 4s, 8s, 16s, 32s
             await new Promise((r) => setTimeout(r, delay));
             continue;
           }
@@ -548,14 +534,14 @@ Comienza la búsqueda ahora.`,
           let result: string;
 
           if (block.name === "search_google_maps") {
-            result = await searchGoogleMaps(
+            result = truncate(await searchGoogleMaps(
               input.query as string,
               input.location as string | undefined,
-            );
+            ));
           } else if (block.name === "search_comino") {
-            result = await searchComino(input.query as string);
+            result = truncate(await searchComino(input.query as string));
           } else if (block.name === "scrape_emails") {
-            result = await scrapeForEmails(input.url as string);
+            result = truncate(await scrapeForEmails(input.url as string));
           } else if (block.name === "save_candidate") {
             const { error } = await supabase.from("candidates").insert({
               name: input.name,
