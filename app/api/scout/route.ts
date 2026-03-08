@@ -485,6 +485,8 @@ Sé eficiente: no busques más de lo necesario. Comienza.`,
       return text.slice(0, max) + "\n...(truncado)";
     };
 
+    const debugLog: string[] = [];
+
     while (turns < maxTurns) {
       turns++;
 
@@ -507,13 +509,24 @@ Sé eficiente: no busques más de lo necesario. Comienza.`,
           break;
         } catch (apiErr: unknown) {
           const status = (apiErr as { status?: number }).status;
+          const errMsg = (apiErr as Error).message || "Unknown API error";
+          debugLog.push(`Turn ${turns}: API error (status=${status}): ${errMsg}`);
           if (status === 429 && retries < maxRetries) {
             retries++;
-            const delay = Math.pow(2, retries) * 2000; // 4s, 8s, 16s, 32s
+            const delay = Math.pow(2, retries) * 2000;
             await new Promise((r) => setTimeout(r, delay));
             continue;
           }
           throw apiErr;
+        }
+      }
+
+      debugLog.push(`Turn ${turns}: stop_reason=${response.stop_reason}, blocks=${response.content.map(b => b.type).join(",")}`);
+
+      // Log text blocks for debugging
+      for (const block of response.content) {
+        if (block.type === "text" && block.text) {
+          debugLog.push(`Turn ${turns} text: ${block.text.slice(0, 200)}`);
         }
       }
 
@@ -527,21 +540,29 @@ Sé eficiente: no busques más de lo necesario. Comienza.`,
         for (const block of response.content) {
           if (block.type !== "tool_use") continue;
 
-          // Skip server-side tools (web_search is handled by Anthropic)
-          if (block.name === "web_search") continue;
+          // Skip server-side tools (web_search is handled by Anthropic internally)
+          if (block.name === "web_search") {
+            debugLog.push(`Turn ${turns}: web_search called (server-side)`);
+            continue;
+          }
 
           const input = block.input as Record<string, unknown>;
           let result: string;
+
+          debugLog.push(`Turn ${turns}: tool=${block.name}, input=${JSON.stringify(input).slice(0, 200)}`);
 
           if (block.name === "search_google_maps") {
             result = truncate(await searchGoogleMaps(
               input.query as string,
               input.location as string | undefined,
             ));
+            debugLog.push(`Turn ${turns}: gmaps result length=${result.length}, preview=${result.slice(0, 100)}`);
           } else if (block.name === "search_comino") {
             result = truncate(await searchComino(input.query as string));
+            debugLog.push(`Turn ${turns}: comino result length=${result.length}`);
           } else if (block.name === "scrape_emails") {
             result = truncate(await scrapeForEmails(input.url as string));
+            debugLog.push(`Turn ${turns}: scrape result=${result.slice(0, 100)}`);
           } else if (block.name === "save_candidate") {
             const { error } = await supabase.from("candidates").insert({
               name: input.name,
@@ -560,12 +581,15 @@ Sé eficiente: no busques más de lo necesario. Comienza.`,
 
             if (error) {
               result = `Error saving: ${error.message}`;
+              debugLog.push(`Turn ${turns}: save ERROR: ${error.message}`);
             } else {
               savedCount++;
               savedNames.push(input.name as string);
               result = `Saved "${input.name}" (score: ${input.score}/10)`;
+              debugLog.push(`Turn ${turns}: SAVED ${input.name}`);
             }
           } else {
+            debugLog.push(`Turn ${turns}: unknown tool ${block.name}`);
             continue;
           }
 
@@ -576,17 +600,33 @@ Sé eficiente: no busques más de lo necesario. Comienza.`,
           });
         }
 
+        // Only push tool results if we have custom tool results to report.
+        // If the model only used web_search (server-side), the results are
+        // already embedded in the response content — no user message needed,
+        // but we must NOT continue the loop without a user message.
         if (toolResults.length > 0) {
           messages.push({ role: "user", content: toolResults });
+        } else {
+          // All tool_use blocks were server-side (web_search).
+          // The response already contains the results, so we need to prompt
+          // the model to continue processing with those results.
+          debugLog.push(`Turn ${turns}: only server-side tools used, prompting continuation`);
+          messages.push({
+            role: "user",
+            content: "Continúa analizando los resultados anteriores. Usa search_google_maps, search_comino o scrape_emails para encontrar candidatos, y save_candidate para guardarlos.",
+          });
         }
       }
     }
+
+    console.log("[Scout debug]", JSON.stringify(debugLog, null, 2));
 
     return NextResponse.json({
       success: true,
       savedCount,
       savedNames,
       turns,
+      debug: debugLog,
     });
   } catch (err) {
     const message = (err as Error).message;
