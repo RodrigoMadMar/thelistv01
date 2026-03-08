@@ -101,6 +101,7 @@ export default function ScoutingPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLocation, setSearchLocation] = useState("");
   const [scouting, setScouting] = useState(false);
+  const [cominoScanning, setCominoScanning] = useState(false);
 
   const handleScoutSearch = async () => {
     if (!searchQuery.trim() || searchQuery.trim().length < 3) {
@@ -140,6 +141,33 @@ export default function ScoutingPage() {
       setToast({ message: "Error de conexión", type: "error" });
     } finally {
       setScouting(false);
+    }
+  };
+
+  const handleCominoScan = async () => {
+    setCominoScanning(true);
+    try {
+      const res = await fetch("/api/scout/comino-scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setToast({ message: data.error || "Error en el escaneo", type: "error" });
+      } else {
+        setToast({
+          message: data.savedCount > 0
+            ? `Comino: ${data.savedCount} nuevo${data.savedCount > 1 ? "s" : ""} de ${data.newListings || 0} listings — ${data.savedNames.join(", ")}`
+            : `Comino: ${data.newListings || 0} listings nuevos, ninguno con score suficiente.`,
+          type: data.savedCount > 0 ? "success" : "error",
+        });
+        fetchCandidates();
+      }
+    } catch {
+      setToast({ message: "Error de conexión", type: "error" });
+    } finally {
+      setCominoScanning(false);
     }
   };
 
@@ -341,6 +369,35 @@ export default function ScoutingPage() {
         {scouting && (
           <p className="mt-3 text-[11px] text-brand-smoke/40 animate-pulse">
             El agente está buscando candidatos… esto puede tomar hasta 1 minuto.
+          </p>
+        )}
+
+        {/* Comino scan */}
+        <div className="mt-3 pt-3 border-t border-brand/50 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-brand-smoke/40">🌶️ Comino.cl</span>
+            <span className="text-[10px] text-brand-smoke/25">
+              Escanea todas las novedades de comino.cl que aún no tengamos
+            </span>
+          </div>
+          <button
+            onClick={handleCominoScan}
+            disabled={cominoScanning || scouting}
+            className="px-5 py-2 border border-orange-400/30 text-orange-400 text-[11px] font-medium tracking-[0.06em] uppercase rounded-lg hover:bg-orange-400/10 hover:-translate-y-px transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 cursor-pointer flex items-center gap-2 shrink-0"
+          >
+            {cominoScanning ? (
+              <>
+                <span className="w-3.5 h-3.5 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+                Escaneando…
+              </>
+            ) : (
+              "Escanear Comino"
+            )}
+          </button>
+        </div>
+        {cominoScanning && (
+          <p className="mt-2 text-[11px] text-orange-400/40 animate-pulse">
+            Crawleando comino.cl y evaluando listings nuevos… puede tomar hasta 2 minutos.
           </p>
         )}
       </div>
