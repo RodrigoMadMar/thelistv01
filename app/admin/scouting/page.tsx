@@ -124,10 +124,14 @@ export default function ScoutingPage() {
       if (!res.ok) {
         setToast({ message: data.error || "Error en la búsqueda", type: "error" });
       } else {
+        // Log debug info to console for troubleshooting
+        if (data.debug) {
+          console.log("[Scout debug]", data.debug);
+        }
         setToast({
           message: data.savedCount > 0
             ? `${data.savedCount} candidato${data.savedCount > 1 ? "s" : ""} encontrado${data.savedCount > 1 ? "s" : ""}: ${data.savedNames.join(", ")}`
-            : "Búsqueda completada — sin candidatos nuevos",
+            : `Búsqueda completada (${data.turns} turnos) — sin candidatos nuevos. Revisa la consola (F12) para debug.`,
           type: data.savedCount > 0 ? "success" : "error",
         });
         fetchCandidates();
