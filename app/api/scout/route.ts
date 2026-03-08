@@ -480,10 +480,10 @@ Sé eficiente: no busques más de lo necesario. Comienza.`,
     const savedNames: string[] = [];
 
     // Truncate long tool results to keep context small
-    function truncate(text: string, max = 1500): string {
+    const truncate = (text: string, max = 1500): string => {
       if (text.length <= max) return text;
       return text.slice(0, max) + "\n...(truncado)";
-    }
+    };
 
     while (turns < maxTurns) {
       turns++;
